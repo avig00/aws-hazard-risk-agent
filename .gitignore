@@ -1,0 +1,175 @@
+# ============================================
+# PYTHON
+# ============================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.pyo
+
+# Virtual environments
+.env
+.venv/
+venv/
+ENV/
+
+# Distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+sdist/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-wheel-metadata/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+.coverage
+.cache
+.pytest_cache/
+
+# ============================================
+# JUPYTER NOTEBOOKS
+# ============================================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ============================================
+# AWS / SAGEMAKER / LOCAL CREDENTIALS
+# ============================================
+
+# AWS credential files (never commit keys)
+.aws/
+credentials
+config
+
+# SageMaker generated artifacts
+**/model.tar.gz
+**/output/*
+**/checkpoints/
+**/sagemaker/**/*
+
+# ============================================
+# AIRFLOW / MWAA
+# ============================================
+
+# Airflow local metadata
+airflow.db
+airflow.sqlite
+logs/*
+!logs/.gitkeep
+
+# ============================================
+# TERRAFORM
+# ============================================
+
+# Local terraform state
+*.tfstate
+*.tfstate.*
+crash.log
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Sensitive variable files
+*.tfvars
+*.tfvars.json
+
+# ============================================
+# PROJECT DATA (DO NOT COMMIT RAW DATA)
+# ============================================
+
+data/
+data/*
+data/*/*
+!data/.gitkeep
+
+# NOAA / FEMA / NRI / Census raw dumps
+**/data/raw/**
+
+# Large intermediate files
+*.parquet
+*.csv
+*.tsv
+*.jsonl
+*.zip
+
+# ============================================
+# ML / RAG ARTIFACTS
+# ============================================
+
+# Model artifacts
+models/
+models/*
+checkpoints/
+checkpoints/*
+
+# Embedding outputs
+embeddings/
+embeddings/*
+
+# Vector index artifacts
+index/
+index/*
+
+# ============================================
+# LOGS & TEMP FILES
+# ============================================
+
+*.log
+logs/
+logs/*
+
+/tmp/*
+temp/
+temp/*
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# ============================================
+# IDE / EDITOR FILES
+# ============================================
+
+# VS Code
+.vscode/
+.history/
+
+# PyCharm
+.idea/
+
+# JetBrains
+*.iml
+
+# ============================================
+# CONTAINERS / DOCKER
+# ============================================
+
+*.pid
+*.pid.lock
+docker/*.log
+docker-compose.override.yml
+
+# ============================================
+# FASTAPI / UVICORN
+# ============================================
+
+# Compiled templates or cache
+*.sqlite
+*.db
