@@ -28,7 +28,7 @@ The end goal is an end-to-end risk intelligence assistant for hazard modeling, i
 
 The agent can answer questions such as:
 
-- “Which counties saw the largest increase in flood events from 2015–2024?”  
+- “Which counties saw the largest increase in flood events from 2015–2023?”  
 - “Show the top 10 counties by predicted risk and highest average property damage.”  
 - “Compare hazard type distributions for Harris County vs Miami-Dade over the last 20 years.”  
 
