@@ -42,7 +42,7 @@ User Question
                     ┌──────▼───────┐
                     │  Streamlit   │
                     │  Dashboard   │
-                    │ (Cloud-hosted│
+                    │(Cloud-hosted)│
                     └──────────────┘
 ```
 
