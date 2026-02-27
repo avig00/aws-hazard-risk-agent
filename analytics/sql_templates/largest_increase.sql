@@ -1,0 +1,33 @@
+-- Counties with the largest absolute increase in events between two periods
+WITH period_a AS (
+    SELECT
+        county_fips,
+        county_name,
+        state,
+        AVG(total_events) AS avg_events_a
+    FROM hazard_gold.risk_feature_mart
+    WHERE year BETWEEN {period_a_start} AND {period_a_end}
+    GROUP BY county_fips, county_name, state
+),
+period_b AS (
+    SELECT
+        county_fips,
+        AVG(total_events) AS avg_events_b
+    FROM hazard_gold.risk_feature_mart
+    WHERE year BETWEEN {period_b_start} AND {period_b_end}
+    GROUP BY county_fips
+)
+SELECT
+    a.county_fips,
+    a.county_name,
+    a.state,
+    ROUND(a.avg_events_a, 2)                            AS avg_events_early,
+    ROUND(b.avg_events_b, 2)                            AS avg_events_recent,
+    ROUND(b.avg_events_b - a.avg_events_a, 2)           AS absolute_increase,
+    ROUND(
+        (b.avg_events_b - a.avg_events_a) / NULLIF(a.avg_events_a, 0) * 100, 1
+    )                                                   AS pct_increase
+FROM period_a a
+JOIN period_b b ON a.county_fips = b.county_fips
+ORDER BY absolute_increase DESC
+LIMIT {limit};

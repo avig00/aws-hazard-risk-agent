@@ -173,3 +173,13 @@ docker-compose.override.yml
 # Compiled templates or cache
 *.sqlite
 *.db
+
+# ============================================
+# STREAMLIT
+# ============================================
+
+# Never commit real secrets
+.streamlit/secrets.toml
+
+# MLflow local run artifacts
+mlruns/
