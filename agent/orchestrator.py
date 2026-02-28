@@ -8,9 +8,10 @@ and the Streamlit app.
 import logging
 
 from agent.router import RoutingDecision, route
-from analytics.query_engine import run_query
+from analytics.query_engine import run_query, run_tag_query
 from ml.inference.inference_service import predict_from_endpoint
 from rag.prompts.ask_template import SYSTEM_PROMPT, build_ask_prompt, build_citations
+from rag.prompts.tag_template import TAG_SYSTEM_PROMPT, build_tag_prompt
 from rag.retrieval.retrieve import retrieve_similar
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -71,7 +72,16 @@ def run_agent(
 
     if "query" in decision.tools:
         try:
-            query_result = run_query(question, limit=limit)
+            if bedrock_call_fn:
+                # TAG: Athena results + LLM synthesis in one step
+                query_result = run_tag_query(
+                    question=question,
+                    synthesize_fn=bedrock_call_fn,
+                    limit=limit,
+                )
+            else:
+                # No LLM available — raw Athena results only
+                query_result = run_query(question, limit=limit)
             tool_outputs["query"] = query_result
         except Exception as exc:
             logger.warning("Query tool failed: %s", exc)
@@ -95,30 +105,55 @@ def run_agent(
     result["tool_outputs"] = tool_outputs
 
     # ── Synthesize answer ─────────────────────────────────────────────────────
-    if bedrock_call_fn and "ask" in decision.tools:
-        chunks = tool_outputs["ask"].get("chunks", [])
+    query_out = tool_outputs.get("query", {})
+    ask_out = tool_outputs.get("ask", {})
 
-        # For hybrid queries, prepend structured data as additional context
-        if "query" in decision.tools and "results" in tool_outputs.get("query", {}):
-            rows = tool_outputs["query"]["results"][:10]
-            structured_context = _format_table_as_text(rows)
-            augmented_question = (
-                f"{question}\n\nStructured analytics results:\n{structured_context}"
-            )
+    if "query" in decision.tools and "ask" not in decision.tools:
+        # Pure query route: TAG already ran inside run_tag_query().
+        # Use its answer directly — no second LLM call needed.
+        result["answer"] = query_out.get("answer", _fallback_answer(tool_outputs, decision.tools))
+        result["sources"] = []
+
+    elif "ask" in decision.tools and "query" not in decision.tools:
+        # Pure RAG route: standard ask_template synthesis.
+        if bedrock_call_fn:
+            chunks = ask_out.get("chunks", [])
+            user_message = build_ask_prompt(question, chunks)
+            try:
+                result["answer"] = bedrock_call_fn(SYSTEM_PROMPT, user_message)
+            except Exception as exc:
+                logger.error("RAG synthesis failed: %s", exc)
+                result["answer"] = _fallback_answer(tool_outputs, decision.tools)
         else:
+            result["answer"] = _fallback_answer(tool_outputs, decision.tools)
+        result["sources"] = ask_out.get("citations", [])
+
+    elif "query" in decision.tools and "ask" in decision.tools:
+        # Hybrid route: combine TAG answer (structured data) with RAG chunks
+        # for a single unified response that draws on both sources.
+        if bedrock_call_fn:
+            tag_answer = query_out.get("answer", "")
+            rag_chunks = ask_out.get("chunks", [])
+
+            # Augment the RAG prompt with the TAG narrative as additional context
             augmented_question = question
+            if tag_answer:
+                augmented_question = (
+                    f"{question}\n\n"
+                    f"[Structured analytics answer]\n{tag_answer}"
+                )
 
-        user_message = build_ask_prompt(augmented_question, chunks)
-        try:
-            answer = bedrock_call_fn(SYSTEM_PROMPT, user_message)
-        except Exception as exc:
-            logger.error("LLM synthesis failed: %s", exc)
-            answer = _fallback_answer(tool_outputs, decision.tools)
+            user_message = build_ask_prompt(augmented_question, rag_chunks)
+            try:
+                result["answer"] = bedrock_call_fn(SYSTEM_PROMPT, user_message)
+            except Exception as exc:
+                logger.error("Hybrid synthesis failed: %s", exc)
+                result["answer"] = tag_answer or _fallback_answer(tool_outputs, decision.tools)
+        else:
+            result["answer"] = _fallback_answer(tool_outputs, decision.tools)
+        result["sources"] = ask_out.get("citations", [])
 
-        result["answer"] = answer
-        result["sources"] = tool_outputs["ask"].get("citations", [])
     else:
-        # No LLM synthesis — return raw structured data
         result["answer"] = _fallback_answer(tool_outputs, decision.tools)
         result["sources"] = []
 

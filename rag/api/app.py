@@ -3,7 +3,7 @@ Unified Agent API — FastAPI application exposing four endpoints:
 
   POST /predict  — ML risk prediction via SageMaker endpoint
   POST /ask      — RAG-based Q&A using OpenSearch + Bedrock Claude
-  POST /query    — Governed NL→SQL analytics over Athena Gold layer
+  POST /query    — Governed NL→SQL + TAG synthesis (Table Augmented Generation)
   POST /agent    — Orchestrates all tools; routes or combines as needed
   GET  /health   — Health check
 """
@@ -54,6 +54,7 @@ class AskRequest(BaseModel):
 class QueryRequest(BaseModel):
     question: str
     limit: int = 20
+    synthesize: bool = True   # Set False to skip TAG and return raw Athena rows
 
 
 class AgentRequest(BaseModel):
@@ -86,33 +87,6 @@ def call_bedrock_claude(system: str, user_message: str, config: dict) -> str:
     )
     result = json.loads(response["body"].read())
     return result["content"][0]["text"]
-
-
-def classify_intent(question: str) -> str:
-    """
-    Simple keyword-based intent classifier to route agent requests.
-    Returns one of: 'predict', 'query', 'ask', 'hybrid'
-    """
-    q = question.lower()
-
-    predict_signals = ["predicted risk", "risk score", "risk prediction", "forecast risk",
-                       "predicted loss", "model score"]
-    query_signals = ["top", "highest", "lowest", "trend", "average", "compare", "ranking",
-                     "how many", "count", "total", "list", "show me counties"]
-    ask_signals = ["why", "what is", "explain", "describe", "how does", "what are the causes",
-                   "documentation", "report", "narrative"]
-
-    is_predict = any(s in q for s in predict_signals)
-    is_query = any(s in q for s in query_signals)
-    is_ask = any(s in q for s in ask_signals)
-
-    if is_predict and is_query:
-        return "hybrid"
-    if is_predict:
-        return "predict"
-    if is_query:
-        return "query"
-    return "ask"
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -174,12 +148,29 @@ def ask(request: AskRequest):
 @app.post("/query")
 def query(request: QueryRequest):
     """
-    Governed NL→SQL: parse intent, compile SQL template, execute via Athena.
+    TAG pipeline: governed NL→SQL over Athena Gold layer, then Bedrock Claude
+    synthesizes a narrative analyst answer from the query results.
+
+    Set synthesize=False in the request body to skip LLM synthesis and return
+    raw Athena rows (useful for programmatic consumers or cost control).
     """
-    # Import here to avoid circular dependency at startup
-    from analytics.query_engine import run_query
+    from analytics.query_engine import run_query, run_tag_query
+    config = load_rag_config()
+
     try:
-        result = run_query(request.question, limit=request.limit)
+        if request.synthesize:
+            # Partial application of call_bedrock_claude with config baked in
+            def _synthesize(system: str, user_msg: str) -> str:
+                return call_bedrock_claude(system, user_msg, config)
+
+            result = run_tag_query(
+                question=request.question,
+                synthesize_fn=_synthesize,
+                limit=request.limit,
+            )
+        else:
+            result = run_query(request.question, limit=request.limit)
+
         return result
     except Exception as exc:
         logger.error("Query failed: %s", exc)
@@ -189,33 +180,23 @@ def query(request: QueryRequest):
 @app.post("/agent")
 def agent(request: AgentRequest):
     """
-    Top-level agent endpoint: classify intent, call appropriate tool(s),
-    synthesize a unified grounded response.
+    Top-level agent endpoint: routes the question through the full agent orchestrator,
+    combining /predict, /query (with TAG synthesis), and /ask tools as needed.
     """
-    intent = classify_intent(request.question)
-    logger.info("Agent routing: '%s' → intent=%s", request.question[:80], intent)
+    from agent.orchestrator import run_agent
+    config = load_rag_config()
 
-    response = {"question": request.question, "intent": intent}
+    def _bedrock_call(system: str, user_msg: str) -> str:
+        return call_bedrock_claude(system, user_msg, config)
 
-    if intent == "predict":
-        result = predict(PredictRequest(features={}, county_id=""))
-        response.update({"tool": "predict", "data": result})
+    try:
+        result = run_agent(
+            question=request.question,
+            top_k=request.top_k,
+            bedrock_call_fn=_bedrock_call,
+        )
+    except Exception as exc:
+        logger.error("Agent failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
-    elif intent == "query":
-        result = query(QueryRequest(question=request.question))
-        response.update({"tool": "query", "data": result})
-
-    elif intent == "hybrid":
-        # Call both predict (batch scores) and query (structured analytics), merge
-        query_result = query(QueryRequest(question=request.question))
-        response.update({
-            "tool": "hybrid",
-            "analytics": query_result,
-        })
-
-    else:
-        # Default: RAG ask
-        ask_result = ask(AskRequest(question=request.question, top_k=request.top_k))
-        response.update({"tool": "ask", "data": ask_result})
-
-    return response
+    return result

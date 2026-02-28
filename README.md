@@ -51,9 +51,18 @@ User Question
 | Question type | Tools invoked |
 |---|---|
 | "Predicted risk score for X county" | `/predict` |
-| "Top N counties by damage 2015–2023" | `/query` |
-| "Why are floods increasing in Harris County?" | `/ask` |
-| "Top counties by predicted risk and damage" | `/predict` + `/query` (hybrid) |
+| "Top N counties by damage 2015–2023" | `/query` + TAG synthesis |
+| "Why are floods increasing in Harris County?" | `/ask` (RAG) |
+| "Top counties by predicted risk and damage" | `/predict` + `/query` + TAG (hybrid) |
+
+### TAG vs RAG
+
+The system uses two distinct LLM grounding strategies:
+
+- **RAG (`/ask`)** — retrieves relevant document chunks from OpenSearch and instructs the LLM to answer *only from those sources* with citations. Best for narrative questions about hazard concepts, policy, and reports.
+- **TAG (`/query`) — Table Augmented Generation** — runs a governed SQL query over Athena, then passes the *structured results table* to the LLM for interpretation. The LLM adds domain context and analytical insight on top of the computed numbers. Best for data-driven ranking, trend, and comparison questions.
+
+TAG and RAG are combined in the hybrid route: the TAG narrative is prepended into the RAG prompt as additional context, giving the LLM one coherent input that draws from both structured data and documents.
 
 ---
 
@@ -64,8 +73,9 @@ User Question
 | ML Training + Deployment | SageMaker Pipelines + XGBoost |
 | Experiment Tracking | MLflow |
 | Feature + Gold Analytics | Athena (Gold-layer only) |
+| Analytics Synthesis (TAG) | Bedrock Claude 3 Sonnet over Athena results |
 | Vector Database | OpenSearch Serverless (kNN, cosine) |
-| LLM Generation | Bedrock Claude 3 Sonnet |
+| Document Synthesis (RAG) | Bedrock Claude 3 Sonnet over retrieved chunks |
 | Serving Layer | ECS Fargate + API Gateway |
 | Infrastructure as Code | Terraform |
 | Frontend | Streamlit Cloud |
@@ -103,7 +113,8 @@ aws-hazard-risk-agent/
 │   ├── retrieval/
 │   │   └── retrieve.py            # kNN vector search with score filtering
 │   ├── prompts/
-│   │   └── ask_template.py        # Bedrock Claude prompt templates + citations
+│   │   ├── ask_template.py        # RAG prompt templates + citation builder
+│   │   └── tag_template.py        # TAG system prompt + table formatter + column legend
 │   └── api/
 │       └── app.py                 # FastAPI: /predict, /ask, /query, /agent
 ├── analytics/
@@ -180,6 +191,11 @@ pytest tests/ -v
 ---
 
 ## Governance & Safety
+
+The `/query` endpoint supports two response modes:
+
+- `synthesize: true` (default) — runs the governed Athena query, then calls Bedrock Claude to produce a narrative analyst answer from the results table (TAG pipeline)
+- `synthesize: false` — returns raw Athena rows as JSON, useful for programmatic consumers or cost control
 
 The `/query` analytics tool enforces strict guardrails:
 

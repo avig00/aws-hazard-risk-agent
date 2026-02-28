@@ -169,6 +169,66 @@ def run_query(
     }
 
 
+def run_tag_query(
+    question: str,
+    synthesize_fn,
+    limit: int = 20,
+    s3_output: str = None,
+    region: str = "us-east-1",
+) -> dict:
+    """
+    Table Augmented Generation (TAG) pipeline:
+    1. Run the governed Athena query via run_query()
+    2. Pass the results + original question to an LLM for narrative synthesis
+    3. Return both the raw data and the synthesized analyst answer
+
+    Args:
+        question:      User's natural-language question.
+        synthesize_fn: Callable(system_prompt, user_message) → str.
+                       Injected to keep query_engine.py free of boto3 imports.
+                       Typically wraps Bedrock Claude (app.py or orchestrator).
+        limit:         Max rows to return from Athena.
+        s3_output:     S3 path for Athena result staging.
+        region:        AWS region.
+
+    Returns:
+        dict with all keys from run_query() plus:
+          - answer:        LLM-synthesized narrative (TAG output)
+          - tag_enabled:   True — flag for downstream consumers
+    """
+    from rag.prompts.tag_template import TAG_SYSTEM_PROMPT, build_tag_prompt
+
+    # Step 1: governed Athena query (unchanged pipeline)
+    query_result = run_query(question, limit=limit, s3_output=s3_output, region=region)
+
+    results = query_result["results"]
+    sql = query_result["sql_executed"]
+    intent = query_result["intent"]
+    row_count = query_result["row_count"]
+
+    # Step 2: synthesize — skip gracefully if no results or no LLM available
+    if not results:
+        logger.info("TAG synthesis skipped: no rows returned")
+        return {**query_result, "answer": "The query returned no results.", "tag_enabled": True}
+
+    user_message = build_tag_prompt(
+        question=question,
+        results=results,
+        sql_executed=sql,
+        intent=intent,
+        row_count=row_count,
+    )
+
+    try:
+        answer = synthesize_fn(TAG_SYSTEM_PROMPT, user_message)
+        logger.info("TAG synthesis complete (%d chars)", len(answer))
+    except Exception as exc:
+        logger.warning("TAG synthesis failed, returning raw results: %s", exc)
+        answer = f"Analytics results ({row_count} rows). LLM synthesis unavailable: {exc}"
+
+    return {**query_result, "answer": answer, "tag_enabled": True}
+
+
 if __name__ == "__main__":
     questions = [
         "Show the top 10 counties by risk from 2015 to 2023",
