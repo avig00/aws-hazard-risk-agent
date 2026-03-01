@@ -2,7 +2,7 @@
 Unified Agent API — FastAPI application exposing four endpoints:
 
   POST /predict  — ML risk prediction via SageMaker endpoint
-  POST /ask      — RAG-based Q&A using OpenSearch + Bedrock Claude
+  POST /ask      — RAG-based Q&A using Pinecone + Bedrock Claude
   POST /query    — Governed NL→SQL + TAG synthesis (Table Augmented Generation)
   POST /agent    — Orchestrates all tools; routes or combines as needed
   GET  /health   — Health check

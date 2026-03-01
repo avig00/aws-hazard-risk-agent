@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "model_config.yml"
-OUTPUT_PATH = "s3://hazard/gold/batch_predictions/"
+OUTPUT_PATH = "s3://aws-hazard-risk-vigamogh-dev/hazard/gold/batch_predictions/"
 
 
 def load_config() -> dict:
@@ -36,7 +36,7 @@ def load_inference_data(database: str, table: str, year: int = None) -> pd.DataF
     query = f"""
         SELECT *
         FROM {database}.{table}
-        WHERE NRI_ExpectedLoss IS NOT NULL
+        WHERE nri_eal_score IS NOT NULL
         {year_filter}
     """
     logger.info("Loading inference data from Athena (year=%s)...", year or "latest")

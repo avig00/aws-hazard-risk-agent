@@ -1,19 +1,20 @@
--- Counties with the largest absolute increase in events between two periods
+-- Counties with the largest absolute increase in NOAA events between two periods
 WITH period_a AS (
     SELECT
-        county_fips,
-        county_name,
-        state,
-        AVG(total_events) AS avg_events_a
-    FROM hazard_gold.risk_feature_mart
-    WHERE year BETWEEN {period_a_start} AND {period_a_end}
-    GROUP BY county_fips, county_name, state
+        r.county_fips,
+        d.county_name,
+        d.state,
+        AVG(r.noaa_event_count) AS avg_events_a
+    FROM gold_hazard.risk_feature_mart r
+    JOIN gold_hazard.county_dim d ON r.county_fips = d.county_fips
+    WHERE r.year BETWEEN {period_a_start} AND {period_a_end}
+    GROUP BY r.county_fips, d.county_name, d.state
 ),
 period_b AS (
     SELECT
         county_fips,
-        AVG(total_events) AS avg_events_b
-    FROM hazard_gold.risk_feature_mart
+        AVG(noaa_event_count) AS avg_events_b
+    FROM gold_hazard.risk_feature_mart
     WHERE year BETWEEN {period_b_start} AND {period_b_end}
     GROUP BY county_fips
 )

@@ -110,20 +110,20 @@ def test_compile_sql_raises_on_missing_param():
 # ── _enforce_guardrails ───────────────────────────────────────────────────────
 
 def test_guardrails_allows_valid_sql():
-    sql = "SELECT * FROM hazard_gold.risk_feature_mart LIMIT 10;"
+    sql = "SELECT * FROM gold_hazard.risk_feature_mart LIMIT 10;"
     result = _enforce_guardrails(sql)
     assert "LIMIT" in result
 
 
 def test_guardrails_adds_missing_limit():
-    sql = "SELECT * FROM hazard_gold.risk_feature_mart WHERE year = 2023"
+    sql = "SELECT * FROM gold_hazard.risk_feature_mart WHERE year = 2023"
     result = _enforce_guardrails(sql)
     assert "LIMIT" in result
 
 
 def test_guardrails_blocks_drop():
     with pytest.raises(ValueError, match="Forbidden SQL keyword"):
-        _enforce_guardrails("DROP TABLE hazard_gold.risk_feature_mart;")
+        _enforce_guardrails("DROP TABLE gold_hazard.risk_feature_mart;")
 
 
 def test_guardrails_blocks_non_gold_table():

@@ -122,20 +122,6 @@ resource "aws_iam_role_policy" "ecs_task_sagemaker" {
   })
 }
 
-resource "aws_iam_role_policy" "ecs_task_opensearch" {
-  name = "hazard-ecs-opensearch"
-  role = aws_iam_role.ecs_task.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["aoss:APIAccessAll"]
-      Resource = "*"
-    }]
-  })
-}
-
 resource "aws_iam_role_policy" "ecs_task_athena" {
   name = "hazard-ecs-athena"
   role = aws_iam_role.ecs_task.id
@@ -171,6 +157,41 @@ resource "aws_iam_role_policy" "ecs_task_secrets" {
       Effect   = "Allow"
       Action   = ["secretsmanager:GetSecretValue"]
       Resource = "arn:aws:secretsmanager:${var.region}:${data.aws_caller_identity.current.account_id}:secret:hazard/*"
+    }]
+  })
+}
+
+# ── Lambda retraining role ────────────────────────────────────────────────────
+resource "aws_iam_role" "lambda_retrain" {
+  name = "hazard-lambda-retrain-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+  role       = aws_iam_role.lambda_retrain.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "lambda_retrain_sagemaker" {
+  name = "hazard-lambda-sagemaker-pipeline"
+  role = aws_iam_role.lambda_retrain.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["sagemaker:StartPipelineExecution", "sagemaker:DescribePipelineExecution"]
+      Resource = "arn:aws:sagemaker:${var.region}:${data.aws_caller_identity.current.account_id}:pipeline/hazard-risk-pipeline"
     }]
   })
 }

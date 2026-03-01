@@ -16,8 +16,7 @@ mlflow>=2.11.0
 sagemaker>=2.210.0
 
 # ── RAG / Vector search ──────────────────────────────────────────────────────
-opensearch-py>=2.4.0
-requests-aws4auth>=1.2.3
+pinecone>=3.0.0
 pypdf>=4.1.0
 langchain-text-splitters>=0.0.1
 

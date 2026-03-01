@@ -21,7 +21,7 @@ _PREDICT_SIGNALS = [
     r"forecast\s+risk", r"predicted\s+loss", r"ml\s+model",
 ]
 _QUERY_SIGNALS = [
-    r"\btop\s+\d+\b", r"\bhighest\b", r"\blowest\b", r"\btrend\b",
+    r"\btop\b", r"\bhighest\b", r"\blowest\b", r"\btrend\b",
     r"\bcompare\b", r"\branking\b", r"\bhow\s+many\b", r"\btotal\b",
     r"\baverage\b", r"\blist\s+(all\s+)?counties\b", r"\blargest\s+increase\b",
     r"\byear.over.year\b", r"\bby\s+year\b",

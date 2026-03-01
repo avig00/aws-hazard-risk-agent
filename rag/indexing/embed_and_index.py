@@ -1,7 +1,8 @@
 """
 Embed document chunks using Amazon Titan Embeddings (via Bedrock)
-and bulk-index them into OpenSearch Serverless.
+and bulk-upsert them into Pinecone.
 
+Pinecone free tier: 1 index, 100K vectors, 5 GB storage.
 Run this once to build the vector index, then run again incrementally
 to add new documents.
 """
@@ -13,7 +14,6 @@ from pathlib import Path
 
 import boto3
 import yaml
-from opensearchpy import AWSV4SignerAuth, OpenSearch, RequestsHttpConnection, helpers
 
 from rag.indexing.chunk_documents import build_corpus_chunks
 
@@ -28,56 +28,25 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def get_opensearch_client(endpoint: str, region: str = "us-east-1") -> OpenSearch:
-    """Build an authenticated OpenSearch Serverless client using SigV4."""
-    credentials = boto3.Session().get_credentials()
-    auth = AWSV4SignerAuth(credentials, region, service="aoss")
+def _get_pinecone_index(api_key: str, index_name: str, dimensions: int):
+    """Return a Pinecone Index, creating it if it doesn't exist."""
+    from pinecone import Pinecone, ServerlessSpec
 
-    host = endpoint.replace("https://", "").rstrip("/")
-    client = OpenSearch(
-        hosts=[{"host": host, "port": 443}],
-        http_auth=auth,
-        use_ssl=True,
-        verify_certs=True,
-        connection_class=RequestsHttpConnection,
-        timeout=30,
-    )
-    return client
+    pc = Pinecone(api_key=api_key)
+    existing = [idx.name for idx in pc.list_indexes()]
+    if index_name not in existing:
+        logger.info("Creating Pinecone index '%s' (%d dims, cosine)", index_name, dimensions)
+        pc.create_index(
+            name=index_name,
+            dimension=dimensions,
+            metric="cosine",
+            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+        )
+        while not pc.describe_index(index_name).status["ready"]:
+            logger.info("Waiting for Pinecone index to be ready...")
+            time.sleep(3)
 
-
-def create_index_if_not_exists(client: OpenSearch, index_name: str, dimensions: int) -> None:
-    """Create a kNN vector index if it doesn't already exist."""
-    if client.indices.exists(index=index_name):
-        logger.info("Index '%s' already exists — skipping creation", index_name)
-        return
-
-    mapping = {
-        "settings": {
-            "index": {
-                "knn": True,
-                "knn.algo_param.ef_search": 512,
-            }
-        },
-        "mappings": {
-            "properties": {
-                "embedding": {
-                    "type": "knn_vector",
-                    "dimension": dimensions,
-                    "method": {
-                        "name": "hnsw",
-                        "space_type": "cosinesimil",
-                        "engine": "nmslib",
-                        "parameters": {"ef_construction": 512, "m": 16},
-                    },
-                },
-                "text": {"type": "text"},
-                "metadata": {"type": "object", "enabled": True},
-            }
-        },
-    }
-
-    client.indices.create(index=index_name, body=mapping)
-    logger.info("Created kNN index '%s' with %d dimensions", index_name, dimensions)
+    return pc.Index(index_name)
 
 
 def embed_text(text: str, model_id: str, bedrock_client) -> list:
@@ -116,64 +85,62 @@ def embed_chunks_batch(
     return embedded
 
 
-def bulk_index(client: OpenSearch, index_name: str, embedded_chunks: list) -> dict:
-    """Bulk-index all embedded chunks into OpenSearch."""
-    actions = [
+def upsert_to_pinecone(index, embedded_chunks: list, batch_size: int = 100) -> dict:
+    """Upsert all embedded chunks into a Pinecone index in batches."""
+    vectors = [
         {
-            "_index": index_name,
-            "_id": chunk["id"],
-            "_source": {
-                "embedding": chunk["embedding"],
-                "text": chunk["text"],
-                "metadata": chunk["metadata"],
-            },
+            "id": chunk["id"],
+            "values": chunk["embedding"],
+            "metadata": {**chunk["metadata"], "text": chunk["text"]},
         }
         for chunk in embedded_chunks
     ]
 
-    success, errors = helpers.bulk(client, actions, raise_on_error=False, chunk_size=200)
-    logger.info("Indexed %d documents | Errors: %d", success, len(errors))
-    if errors:
-        logger.warning("First error: %s", errors[0])
-    return {"indexed": success, "errors": len(errors)}
+    total_upserted = 0
+    for i in range(0, len(vectors), batch_size):
+        batch = vectors[i : i + batch_size]
+        index.upsert(vectors=batch)
+        total_upserted += len(batch)
+        logger.info("Upserted %d / %d vectors", total_upserted, len(vectors))
+
+    logger.info("Pinecone upsert complete: %d vectors", total_upserted)
+    return {"indexed": total_upserted, "errors": 0}
 
 
-def run_indexing(config: dict = None, opensearch_endpoint: str = None) -> dict:
+def run_indexing(config: dict = None, pinecone_api_key: str = None) -> dict:
     """
     Full indexing pipeline:
     1. Chunk all corpus documents
     2. Embed each chunk via Bedrock Titan
-    3. Bulk-index into OpenSearch Serverless
+    3. Upsert into Pinecone
 
-    opensearch_endpoint can also be set via the OPENSEARCH_ENDPOINT env var.
+    pinecone_api_key can also be set via the PINECONE_API_KEY env var.
     """
     if config is None:
         config = load_config()
 
     rag_cfg = config["rag"]
-    os_cfg = config.get("opensearch", {})
+    pinecone_cfg = config.get("pinecone", {})
 
-    endpoint = (
-        opensearch_endpoint
-        or os.environ.get("OPENSEARCH_ENDPOINT")
-        or os_cfg.get("collection_endpoint", "")
+    api_key = (
+        pinecone_api_key
+        or os.environ.get("PINECONE_API_KEY")
+        or pinecone_cfg.get("api_key", "")
     )
-    if not endpoint:
+    if not api_key:
         raise ValueError(
-            "OpenSearch endpoint required. Set OPENSEARCH_ENDPOINT env var "
-            "or opensearch.collection_endpoint in rag_config.yml"
+            "Pinecone API key required. Set PINECONE_API_KEY env var "
+            "or pinecone.api_key in rag_config.yml"
         )
 
     region = rag_cfg.get("region", "us-east-1")
-    index_name = os_cfg.get("index_name", rag_cfg["vector_index"])
+    index_name = pinecone_cfg.get("index_name", rag_cfg.get("vector_index", "hazard-risk-docs"))
     dimensions = rag_cfg.get("embedding_dimensions", 1536)
     model_id = rag_cfg["embedding_model"]
 
     # Clients
     bedrock = boto3.client("bedrock-runtime", region_name=region)
-    os_client = get_opensearch_client(endpoint, region)
-
-    create_index_if_not_exists(os_client, index_name, dimensions)
+    pinecone_index = _get_pinecone_index(api_key, index_name, dimensions)
 
     # Build corpus chunks
     chunks = build_corpus_chunks(config)
@@ -184,8 +151,8 @@ def run_indexing(config: dict = None, opensearch_endpoint: str = None) -> dict:
     # Embed
     embedded_chunks = embed_chunks_batch(chunks, model_id, bedrock)
 
-    # Index
-    result = bulk_index(os_client, index_name, embedded_chunks)
+    # Upsert
+    result = upsert_to_pinecone(pinecone_index, embedded_chunks)
     return result
 
 

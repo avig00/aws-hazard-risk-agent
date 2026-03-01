@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "model_config.yml"
 
-BASELINE_PATH = "s3://hazard/ml/monitoring/baseline_stats.json"
-CAPTURE_PATH = "s3://hazard/ml/data-capture/"
+BASELINE_PATH = "s3://aws-hazard-risk-vigamogh-dev/hazard/ml/monitoring/baseline_stats.json"
+CAPTURE_PATH = "s3://aws-hazard-risk-vigamogh-dev/hazard/ml/data-capture/"
 DRIFT_THRESHOLD_KL = 0.1       # Flag if KL divergence exceeds this
-DRIFT_SNS_TOPIC = "arn:aws:sns:us-east-1:ACCOUNT_ID:hazard-model-alerts"
+DRIFT_SNS_TOPIC = os.environ.get("DRIFT_SNS_TOPIC_ARN", "")
 
 
 def load_config() -> dict:

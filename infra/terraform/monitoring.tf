@@ -11,42 +11,6 @@ resource "aws_sns_topic" "model_alerts" {
 
 # ── CloudWatch alarms ─────────────────────────────────────────────────────────
 
-resource "aws_cloudwatch_metric_alarm" "api_5xx" {
-  alarm_name          = "hazard-api-5xx-rate"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "5XXError"
-  namespace           = "AWS/ApiGateway"
-  period              = 60
-  statistic           = "Sum"
-  threshold           = 10
-  alarm_description   = "More than 10 5XX errors per minute on the Hazard Risk API"
-  alarm_actions       = [aws_sns_topic.model_alerts.arn]
-
-  dimensions = {
-    ApiId = aws_apigatewayv2_api.hazard.id
-    Stage = aws_apigatewayv2_stage.prod.name
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "api_latency" {
-  alarm_name          = "hazard-api-p99-latency"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 3
-  metric_name         = "IntegrationLatency"
-  namespace           = "AWS/ApiGateway"
-  period              = 60
-  extended_statistic  = "p99"
-  threshold           = 5000  # 5 seconds
-  alarm_description   = "P99 latency exceeds 5s on the Hazard Risk API"
-  alarm_actions       = [aws_sns_topic.model_alerts.arn]
-
-  dimensions = {
-    ApiId = aws_apigatewayv2_api.hazard.id
-    Stage = aws_apigatewayv2_stage.prod.name
-  }
-}
-
 resource "aws_cloudwatch_metric_alarm" "sagemaker_invocation_errors" {
   alarm_name          = "hazard-sagemaker-invocation-errors"
   comparison_operator = "GreaterThanThreshold"
@@ -72,42 +36,18 @@ resource "aws_cloudwatch_dashboard" "hazard_risk" {
   dashboard_body = jsonencode({
     widgets = [
       {
-        type       = "metric"
-        x          = 0; y = 0; width = 12; height = 6
-        properties = {
-          title   = "API Gateway — Request Count & Error Rate"
-          metrics = [
-            ["AWS/ApiGateway", "Count",     "ApiId", aws_apigatewayv2_api.hazard.id, "Stage", "prod"],
-            ["AWS/ApiGateway", "5XXError",  "ApiId", aws_apigatewayv2_api.hazard.id, "Stage", "prod"],
-            ["AWS/ApiGateway", "4XXError",  "ApiId", aws_apigatewayv2_api.hazard.id, "Stage", "prod"],
-          ]
-          period = 60
-          stat   = "Sum"
-          view   = "timeSeries"
-        }
-      },
-      {
-        type       = "metric"
-        x          = 12; y = 0; width = 12; height = 6
-        properties = {
-          title   = "API Gateway — Latency (P50 / P99)"
-          metrics = [
-            [{ expression = "SELECT AVG(IntegrationLatency) FROM \"AWS/ApiGateway\" GROUP BY ApiId" }],
-          ]
-          period = 60
-          stat   = "p99"
-          view   = "timeSeries"
-        }
-      },
-      {
-        type       = "metric"
-        x          = 0; y = 6; width = 12; height = 6
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 24
+        height = 6
         properties = {
           title   = "SageMaker Endpoint — Invocations & Model Latency"
+          region  = var.region
           metrics = [
-            ["AWS/SageMaker", "Invocations",          "EndpointName", "hazard-risk-model", "VariantName", "primary"],
-            ["AWS/SageMaker", "ModelLatency",          "EndpointName", "hazard-risk-model", "VariantName", "primary"],
-            ["AWS/SageMaker", "Invocation4XXErrors",   "EndpointName", "hazard-risk-model", "VariantName", "primary"],
+            ["AWS/SageMaker", "Invocations",         "EndpointName", "hazard-risk-model", "VariantName", "primary"],
+            ["AWS/SageMaker", "ModelLatency",         "EndpointName", "hazard-risk-model", "VariantName", "primary"],
+            ["AWS/SageMaker", "Invocation4XXErrors",  "EndpointName", "hazard-risk-model", "VariantName", "primary"],
           ]
           period = 60
           stat   = "Average"
@@ -119,7 +59,9 @@ resource "aws_cloudwatch_dashboard" "hazard_risk" {
 }
 
 # ── SageMaker Model Monitor schedule ─────────────────────────────────────────
+# Only deployed after the endpoint is live and baseline stats are in S3 (Phase 3).
 resource "aws_sagemaker_data_quality_job_definition" "hazard_monitor" {
+  count    = local.deploy_endpoint ? 1 : 0
   name     = "hazard-data-quality-monitor"
   role_arn = aws_iam_role.sagemaker_execution.arn
 
@@ -129,10 +71,10 @@ resource "aws_sagemaker_data_quality_job_definition" "hazard_monitor" {
 
   data_quality_baseline_config {
     statistics_resource {
-      s3_uri = "s3://hazard/ml/monitoring/baseline_stats.json"
+      s3_uri = "s3://aws-hazard-risk-vigamogh-dev/hazard/ml/monitoring/baseline_stats.json"
     }
     constraints_resource {
-      s3_uri = "s3://hazard/ml/monitoring/baseline_constraints.json"
+      s3_uri = "s3://aws-hazard-risk-vigamogh-dev/hazard/ml/monitoring/baseline_constraints.json"
     }
   }
 
@@ -148,8 +90,8 @@ resource "aws_sagemaker_data_quality_job_definition" "hazard_monitor" {
   data_quality_job_output_config {
     monitoring_outputs {
       s3_output {
-        local_path    = "/opt/ml/processing/output"
-        s3_uri        = "s3://hazard/ml/monitoring/reports/"
+        local_path     = "/opt/ml/processing/output"
+        s3_uri         = "s3://aws-hazard-risk-vigamogh-dev/hazard/ml/monitoring/reports/"
         s3_upload_mode = "EndOfJob"
       }
     }
@@ -165,10 +107,11 @@ resource "aws_sagemaker_data_quality_job_definition" "hazard_monitor" {
 }
 
 resource "aws_sagemaker_monitoring_schedule" "hazard_daily" {
-  name = "hazard-daily-data-quality"
+  count = local.deploy_endpoint ? 1 : 0
+  name  = "hazard-daily-data-quality"
 
   monitoring_schedule_config {
-    monitoring_job_definition_name = aws_sagemaker_data_quality_job_definition.hazard_monitor.name
+    monitoring_job_definition_name = aws_sagemaker_data_quality_job_definition.hazard_monitor[0].name
     monitoring_type                = "DataQuality"
     schedule_config {
       schedule_expression = "cron(0 6 * * ? *)"  # Daily at 6 AM UTC
@@ -194,20 +137,26 @@ resource "aws_cloudwatch_event_target" "retrain_lambda" {
   input = jsonencode({ reason = "scheduled" })
 }
 
+data "archive_file" "retrain_trigger_zip" {
+  type        = "zip"
+  source_file = "${path.module}/../../ml/monitoring/retrain_trigger.py"
+  output_path = "${path.module}/../../lambda_retrain.zip"
+}
+
 resource "aws_lambda_function" "retrain_trigger" {
   function_name = "hazard-retrain-trigger"
-  role          = aws_iam_role.sagemaker_execution.arn
-  handler       = "ml.monitoring.retrain_trigger.lambda_handler"
+  role          = aws_iam_role.lambda_retrain.arn
+  handler       = "retrain_trigger.lambda_handler"
   runtime       = "python3.11"
   timeout       = 60
 
-  filename         = "${path.module}/../../lambda_retrain.zip"
-  source_code_hash = filebase64sha256("${path.module}/../../lambda_retrain.zip")
+  filename         = data.archive_file.retrain_trigger_zip.output_path
+  source_code_hash = data.archive_file.retrain_trigger_zip.output_base64sha256
 
   environment {
     variables = {
-      PIPELINE_NAME = "hazard-risk-pipeline"
-      AWS_REGION    = var.region
+      PIPELINE_NAME    = "hazard-risk-pipeline"
+      SAGEMAKER_REGION = var.region
     }
   }
 

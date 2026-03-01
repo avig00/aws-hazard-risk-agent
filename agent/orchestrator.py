@@ -23,7 +23,7 @@ def run_agent(
     top_k: int = 5,
     limit: int = 20,
     bedrock_call_fn=None,
-    opensearch_endpoint: str = None,
+    pinecone_api_key: str = None,
     sagemaker_endpoint: str = "hazard-risk-model",
 ) -> dict:
     """
@@ -38,7 +38,7 @@ def run_agent(
         limit: Max rows for analytics queries.
         bedrock_call_fn: Callable(system, user_message) → str for LLM synthesis.
                          Must be injected (avoids circular import with app.py).
-        opensearch_endpoint: Override for OpenSearch; reads env var if None.
+        pinecone_api_key: Pinecone API key; reads PINECONE_API_KEY env var if None.
         sagemaker_endpoint: SageMaker endpoint name for /predict calls.
 
     Returns:
@@ -92,7 +92,7 @@ def run_agent(
             chunks = retrieve_similar(
                 question=question,
                 k=top_k,
-                opensearch_endpoint=opensearch_endpoint,
+                pinecone_api_key=pinecone_api_key,
             )
             tool_outputs["ask"] = {
                 "chunks": chunks,

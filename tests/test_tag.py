@@ -27,7 +27,7 @@ SAMPLE_ROWS = [
     {"county_name": "Broward",       "state": "FL", "avg_expected_loss": 41500.0, "years_on_record": 7},
 ]
 
-SAMPLE_SQL = "SELECT county_name, state, AVG(NRI_ExpectedLoss) AS avg_expected_loss FROM hazard_gold.risk_feature_mart GROUP BY county_name, state ORDER BY avg_expected_loss DESC LIMIT 10;"
+SAMPLE_SQL = "SELECT county_name, state, AVG(nri_eal_score) AS avg_expected_loss FROM gold_hazard.risk_feature_mart GROUP BY county_name, state ORDER BY avg_expected_loss DESC LIMIT 10;"
 
 
 def test_build_tag_prompt_contains_question():
@@ -38,7 +38,7 @@ def test_build_tag_prompt_contains_question():
 
 def test_build_tag_prompt_contains_sql():
     prompt = build_tag_prompt("test", SAMPLE_ROWS, SAMPLE_SQL, "top_counties_by_risk", 3)
-    assert "hazard_gold" in prompt
+    assert "gold_hazard" in prompt
     assert "SELECT" in prompt
 
 

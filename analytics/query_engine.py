@@ -2,7 +2,7 @@
 Governed Athena query engine for the /query analytics tool.
 
 Enforces:
-- Gold-layer table access only (hazard_gold database)
+- Gold-layer table access only (gold_hazard database)
 - Template-based SQL compilation (no free-form SQL injection)
 - Automatic LIMIT enforcement
 - Partition filtering (year range)
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 CONFIG_PATH = Path(__file__).parent.parent / "config" / "model_config.yml"
 TEMPLATE_DIR = Path(__file__).parent / "sql_templates"
 
-ALLOWED_DATABASE = "hazard_gold"
+ALLOWED_DATABASE = "gold_hazard"
 MAX_SCAN_BYTES = 100 * 1024 * 1024  # 100 MB
 MAX_LIMIT = 100
 MIN_YEAR = 2000
@@ -93,7 +93,7 @@ def _compile_sql(template: str, params: dict) -> str:
 def _enforce_guardrails(sql: str) -> str:
     """
     Final safety checks on compiled SQL:
-    - Must reference only hazard_gold tables
+    - Must reference only gold_hazard tables
     - Must contain a LIMIT clause
     - Must not contain DDL or dangerous keywords
     """
@@ -107,8 +107,8 @@ def _enforce_guardrails(sql: str) -> str:
     if "LIMIT" not in sql_upper:
         sql = sql.rstrip("; \n") + f"\nLIMIT {MAX_LIMIT};"
 
-    if "HAZARD_GOLD" not in sql_upper:
-        raise ValueError("Query must reference hazard_gold database (Gold-layer only)")
+    if "GOLD_HAZARD" not in sql_upper:
+        raise ValueError("Query must reference gold_hazard database (Gold-layer only)")
 
     return sql
 
@@ -146,7 +146,7 @@ def run_query(
     # 4. Execute via Athena
     output_location = (
         s3_output
-        or os.environ.get("ATHENA_OUTPUT_LOCATION", "s3://hazard/athena-results/")
+        or os.environ.get("ATHENA_OUTPUT_LOCATION", "s3://aws-hazard-risk-vigamogh-dev/athena-results/")
     )
 
     df = wr.athena.read_sql_query(

@@ -9,6 +9,7 @@ Starts a new SageMaker Pipeline execution to re-train and re-register the model.
 """
 import json
 import logging
+import os
 
 import boto3
 
@@ -16,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 PIPELINE_NAME = "hazard-risk-pipeline"
-REGION = "us-east-1"
+REGION = os.environ.get("SAGEMAKER_REGION", "us-east-1")
 
 
 def trigger_retraining(
@@ -43,7 +44,7 @@ def trigger_retraining(
         PipelineExecutionDescription=f"Automated retrain triggered by: {reason}",
         PipelineParameters=[
             # Use latest Gold layer data
-            {"Name": "InputDataUri", "Value": "s3://hazard/gold/risk_feature_mart/"},
+            {"Name": "InputDataUri", "Value": "s3://aws-hazard-risk-vigamogh-dev/hazard/gold/risk_feature_mart/"},
         ],
     )
 

@@ -42,8 +42,8 @@ def _configure_aws():
         os.environ["AWS_ACCESS_KEY_ID"]     = st.secrets["aws"]["access_key_id"]
         os.environ["AWS_SECRET_ACCESS_KEY"] = st.secrets["aws"]["secret_access_key"]
         os.environ["AWS_DEFAULT_REGION"]    = st.secrets["aws"].get("region", "us-east-1")
-    if hasattr(st, "secrets") and "opensearch" in st.secrets:
-        os.environ["OPENSEARCH_ENDPOINT"] = st.secrets["opensearch"]["endpoint"]
+    if hasattr(st, "secrets") and "pinecone" in st.secrets:
+        os.environ["PINECONE_API_KEY"] = st.secrets["pinecone"]["api_key"]
 
 
 _configure_aws()
@@ -138,7 +138,7 @@ if prompt := st.chat_input("Ask a hazard risk question…"):
                     top_k=top_k,
                     limit=row_limit,
                     bedrock_call_fn=bedrock_call,
-                    opensearch_endpoint=os.environ.get("OPENSEARCH_ENDPOINT"),
+                    pinecone_api_key=os.environ.get("PINECONE_API_KEY"),
                 )
             except Exception as exc:
                 render_error(str(exc))

@@ -2,12 +2,15 @@
 Pull Gold-layer hazard risk data from Athena, split into train/test,
 and save as Parquet files for ML training.
 
-Gold layer source: s3://hazard/gold/risk_feature_mart/
+Gold layer source: s3://aws-hazard-risk-vigamogh-dev/hazard/gold/risk_feature_mart/
 """
+import io
 import json
 import logging
+import time
 from pathlib import Path
 
+import boto3
 import awswrangler as wr
 import pandas as pd
 import yaml
@@ -17,6 +20,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "model_config.yml"
+ATHENA_OUTPUT = "s3://aws-hazard-risk-vigamogh-dev/athena-results/"
 
 
 def load_config() -> dict:
@@ -24,21 +28,93 @@ def load_config() -> dict:
         return yaml.safe_load(f)
 
 
-def pull_gold_data(database: str, table: str) -> pd.DataFrame:
-    """Query the Gold-layer risk feature mart from Athena."""
-    logger.info("Querying Athena: %s.%s", database, table)
-    query = f"""
-        SELECT *
-        FROM {database}.{table}
-        WHERE NRI_ExpectedLoss IS NOT NULL
-        ORDER BY county_fips, year
+def _run_athena_query(sql: str, database: str) -> pd.DataFrame:
+    """Execute SQL via boto3 Athena client and return results as a DataFrame.
+
+    Uses boto3 directly to avoid awswrangler's Ray distributed backend,
+    which has a pydantic v2 incompatibility in version 3.x.
     """
-    df = wr.athena.read_sql_query(
-        sql=query,
-        database=database,
-        ctas_approach=False,
+    athena = boto3.client("athena", region_name="us-east-1")
+    s3 = boto3.client("s3", region_name="us-east-1")
+
+    response = athena.start_query_execution(
+        QueryString=sql,
+        QueryExecutionContext={"Database": database},
+        ResultConfiguration={"OutputLocation": ATHENA_OUTPUT},
     )
+    execution_id = response["QueryExecutionId"]
+    logger.info("Athena query started: %s", execution_id)
+
+    # Poll until complete
+    for _ in range(120):  # max 10 minutes
+        status = athena.get_query_execution(QueryExecutionId=execution_id)
+        state = status["QueryExecution"]["Status"]["State"]
+        if state == "SUCCEEDED":
+            break
+        if state in ("FAILED", "CANCELLED"):
+            reason = status["QueryExecution"]["Status"].get("StateChangeReason", "unknown")
+            raise RuntimeError(f"Athena query {state}: {reason}")
+        time.sleep(5)
+    else:
+        raise RuntimeError("Athena query timed out after 10 minutes")
+
+    # Result CSV is at ATHENA_OUTPUT/<execution_id>.csv
+    bucket = "aws-hazard-risk-vigamogh-dev"
+    key = f"athena-results/{execution_id}.csv"
+    logger.info("Reading result from s3://%s/%s", bucket, key)
+    obj = s3.get_object(Bucket=bucket, Key=key)
+    df = pd.read_csv(io.BytesIO(obj["Body"].read()))
     logger.info("Loaded %d rows, %d columns", len(df), len(df.columns))
+    return df
+
+
+def pull_gold_data(database: str, table: str) -> pd.DataFrame:
+    """Query the Gold-layer risk feature mart from Athena.
+
+    nri_eal_score is a static FEMA NRI snapshot (same value per county across all years).
+    We aggregate NOAA/FEMA event features by county (SUM/AVG across all available years)
+    to build a cross-sectional dataset: one row per county.
+    This prevents trivial autoregressive prediction and produces a meaningful model.
+    """
+    logger.info("Querying Athena: %s.%s (cross-sectional aggregate)", database, table)
+    query = f"""
+        SELECT
+            county_fips,
+            -- NOAA event totals across all years
+            SUM(noaa_event_count)           AS noaa_event_count,
+            SUM(noaa_total_fatalities)      AS noaa_total_fatalities,
+            SUM(noaa_total_injuries)        AS noaa_total_injuries,
+            AVG(noaa_avg_property_damage)   AS noaa_avg_property_damage,
+            -- FEMA assistance totals across all years
+            SUM(fema_valid_registrations)   AS fema_valid_registrations,
+            SUM(fema_total_damage)          AS fema_total_damage,
+            SUM(fema_total_approved_ihp_amount) AS fema_total_approved_ihp_amount,
+            SUM(fema_declaration_count)     AS fema_declaration_count,
+            SUM(fema_repair_replace_amount) AS fema_repair_replace_amount,
+            SUM(fema_rental_amount)         AS fema_rental_amount,
+            SUM(fema_other_needs_amount)    AS fema_other_needs_amount,
+            SUM(fema_total_inspected)       AS fema_total_inspected,
+            -- Socioeconomic (stable, use latest available)
+            AVG(population_total)           AS population_total,
+            AVG(median_household_income)    AS median_household_income,
+            AVG(median_home_value)          AS median_home_value,
+            AVG(in_labor_force)             AS in_labor_force,
+            AVG(unemployed)                 AS unemployed,
+            AVG(high_school_grad)           AS high_school_grad,
+            AVG(bachelors)                  AS bachelors,
+            AVG(graduate_degree)            AS graduate_degree,
+            -- NRI sub-scores (static, take max — all values equal per county)
+            MAX(nri_sovi_score)             AS nri_sovi_score,
+            MAX(nri_resl_score)             AS nri_resl_score,
+            -- Target: static NRI EAL score (same value per county)
+            MAX(nri_eal_score)              AS nri_eal_score
+        FROM {database}.{table}
+        WHERE nri_eal_score IS NOT NULL
+        GROUP BY county_fips
+        ORDER BY county_fips
+    """
+    df = _run_athena_query(query, database)
+    logger.info("Cross-sectional dataset: %d counties, %d columns", len(df), len(df.columns))
     return df
 
 

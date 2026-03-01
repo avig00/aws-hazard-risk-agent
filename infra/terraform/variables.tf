@@ -10,6 +10,12 @@ variable "sagemaker_model_name" {
   default     = "hazard-risk-xgboost-v1"
 }
 
+variable "model_data_uri" {
+  description = "S3 URI of the trained model artifact (model.tar.gz) — set after training"
+  type        = string
+  default     = ""
+}
+
 variable "project" {
   description = "Project name tag applied to all resources"
   type        = string

@@ -101,11 +101,11 @@ def engineer_features(df: pd.DataFrame, config: dict = None) -> pd.DataFrame:
 
     logger.info("Starting feature engineering on %d rows", len(df))
 
-    # 1. Log-transform skewed columns
-    df = log_transform(df, feat_cfg.get("log_transform", []))
-
-    # 2. Median imputation for numeric features
+    # 1. Median imputation first so log-transform operates on filled values
     df = impute_numeric(df, feat_cfg.get("numeric", []))
+
+    # 2. Log-transform skewed columns (after imputation so no NaN propagation)
+    df = log_transform(df, feat_cfg.get("log_transform", []))
 
     # 3. Lag features for temporal signals
     df = add_lag_features(df, feat_cfg.get("lag_features", []))

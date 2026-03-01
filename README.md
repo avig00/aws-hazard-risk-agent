@@ -32,7 +32,7 @@ User Question
      ┌─────▼─────┐  ┌─────▼──────┐  ┌───▼──────────┐
      │  /predict  │  │  /query    │  │   /ask        │
      │            │  │            │  │               │
-     │ XGBoost ML │  │ NL → SQL   │  │ OpenSearch    │
+     │ XGBoost ML │  │ NL → SQL   │  │ Pinecone      │
      │ SageMaker  │  │ Athena     │  │ kNN retrieval │
      │ Endpoint   │  │ Gold Layer │  │ + Bedrock LLM │
      └─────┬──────┘  └─────┬──────┘  └──────┬────────┘
@@ -59,7 +59,7 @@ User Question
 
 The system uses two distinct LLM grounding strategies:
 
-- **RAG (`/ask`)** — retrieves relevant document chunks from OpenSearch and instructs the LLM to answer *only from those sources* with citations. Best for narrative questions about hazard concepts, policy, and reports.
+- **RAG (`/ask`)** — retrieves relevant document chunks from Pinecone and instructs the LLM to answer *only from those sources* with citations. Best for narrative questions about hazard concepts, policy, and reports.
 - **TAG (`/query`) — Table Augmented Generation** — runs a governed SQL query over Athena, then passes the *structured results table* to the LLM for interpretation. The LLM adds domain context and analytical insight on top of the computed numbers. Best for data-driven ranking, trend, and comparison questions.
 
 TAG and RAG are combined in the hybrid route: the TAG narrative is prepended into the RAG prompt as additional context, giving the LLM one coherent input that draws from both structured data and documents.
@@ -74,7 +74,7 @@ TAG and RAG are combined in the hybrid route: the TAG narrative is prepended int
 | Experiment Tracking | MLflow |
 | Feature + Gold Analytics | Athena (Gold-layer only) |
 | Analytics Synthesis (TAG) | Bedrock Claude 3 Sonnet over Athena results |
-| Vector Database | OpenSearch Serverless (kNN, cosine) |
+| Vector Database | Pinecone (free tier, cosine) |
 | Document Synthesis (RAG) | Bedrock Claude 3 Sonnet over retrieved chunks |
 | Serving Layer | ECS Fargate + API Gateway |
 | Infrastructure as Code | Terraform |
@@ -90,7 +90,7 @@ aws-hazard-risk-agent/
 ├── requirements.txt
 ├── config/
 │   ├── model_config.yml            # XGBoost hyperparams, feature schema, MLflow settings
-│   └── rag_config.yml              # Embedding model, chunk size, OpenSearch config
+│   └── rag_config.yml              # Embedding model, chunk size, Pinecone config
 ├── ml/
 │   ├── data_prep/
 │   │   ├── build_training_data.py  # Athena → Parquet train/test splits
@@ -109,7 +109,7 @@ aws-hazard-risk-agent/
 ├── rag/
 │   ├── indexing/
 │   │   ├── chunk_documents.py     # PDF/TXT → overlapping chunks + metadata
-│   │   └── embed_and_index.py     # Titan embeddings → OpenSearch bulk index
+│   │   └── embed_and_index.py     # Titan embeddings → Pinecone upsert
 │   ├── retrieval/
 │   │   └── retrieve.py            # kNN vector search with score filtering
 │   ├── prompts/
@@ -124,7 +124,7 @@ aws-hazard-risk-agent/
 ├── agent/
 │   ├── router.py                  # Multi-signal intent routing rules
 │   └── orchestrator.py            # Top-level agent loop + tool execution
-├── infra/terraform/               # IAM, VPC, ECS, OpenSearch, API GW, monitoring
+├── infra/terraform/               # IAM, VPC, ECS, SageMaker, API GW, monitoring
 ├── ui/
 │   ├── chat.py                    # Session state + conversation history
 │   └── components.py             # Tables, charts, citation cards, prediction panels
@@ -137,7 +137,8 @@ aws-hazard-risk-agent/
 
 ### Prerequisites
 - Python 3.11+
-- AWS credentials with access to: Athena, Bedrock, SageMaker, OpenSearch Serverless, S3
+- AWS credentials with access to: Athena, Bedrock, SageMaker, S3
+- Pinecone account (free tier) with an API key
 
 ```bash
 pip install -r requirements.txt
@@ -147,7 +148,7 @@ pip install -r requirements.txt
 
 ```bash
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-# Edit secrets.toml with your AWS credentials and OpenSearch endpoint
+# Edit secrets.toml with your AWS credentials and Pinecone API key
 ```
 
 ### Run the Streamlit app
@@ -228,7 +229,7 @@ This project uses AWS-native tooling. The same design maps directly onto Snowfla
 |---|---|
 | Athena + Gold-layer S3 tables | Snowflake SQL + Gold-layer tables |
 | Governed NL→SQL `/query` tool | **Cortex Analyst** |
-| OpenSearch Serverless vector search | **Cortex Search** |
+| Pinecone vector search | **Cortex Search** |
 | Bedrock Claude LLM synthesis | **Cortex LLM Functions** (`COMPLETE`) |
 | SageMaker Pipelines + MLflow | **Snowflake ML** (feature store, model registry) |
 | Streamlit Cloud frontend | **Streamlit in Snowflake** |

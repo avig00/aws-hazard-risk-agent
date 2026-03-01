@@ -1,19 +1,20 @@
 -- Side-by-side metric comparison for a list of counties
 SELECT
-    county_fips,
-    county_name,
-    state,
-    year,
-    total_events,
-    total_fatalities,
-    fema_claim_count,
-    ROUND(fema_property_damage, 2)       AS property_damage,
-    ROUND(NRI_ExpectedLoss, 2)           AS expected_loss,
-    ROUND(NRI_Exposure, 4)              AS exposure,
-    ROUND(NRI_SocialVulnerability, 4)   AS vulnerability,
-    ROUND(NRI_CommunityResilience, 4)   AS resilience
-FROM hazard_gold.risk_feature_mart
-WHERE county_fips IN ({county_fips_list})
-  AND year BETWEEN {start_year} AND {end_year}
-ORDER BY county_fips, year ASC
+    r.county_fips,
+    d.county_name,
+    d.state,
+    r.year,
+    r.noaa_event_count,
+    r.noaa_total_fatalities,
+    r.fema_declaration_count,
+    ROUND(r.fema_total_damage, 2)           AS fema_total_damage,
+    ROUND(r.nri_eal_score, 2)               AS expected_loss,
+    ROUND(r.nri_risk_score, 4)             AS risk_score,
+    ROUND(r.nri_sovi_score, 4)             AS vulnerability,
+    ROUND(r.nri_resl_score, 4)             AS resilience
+FROM gold_hazard.risk_feature_mart r
+JOIN gold_hazard.county_dim d ON r.county_fips = d.county_fips
+WHERE r.county_fips IN ({county_fips_list})
+  AND r.year BETWEEN {start_year} AND {end_year}
+ORDER BY r.county_fips, r.year ASC
 LIMIT {limit};

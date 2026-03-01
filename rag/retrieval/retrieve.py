@@ -1,6 +1,9 @@
 """
 Vector retrieval: embed a user query and find the top-k most similar
-document chunks in OpenSearch Serverless using kNN search.
+document chunks in Pinecone using cosine similarity search.
+
+Pinecone free tier: 1 index, 100K vectors, 5 GB storage — sufficient for
+the FEMA/NOAA hazard document corpus used in this project.
 """
 import json
 import logging
@@ -9,7 +12,6 @@ from pathlib import Path
 
 import boto3
 import yaml
-from opensearchpy import AWSV4SignerAuth, OpenSearch, RequestsHttpConnection
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -20,20 +22,6 @@ CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "rag_config.yml"
 def load_config() -> dict:
     with open(CONFIG_PATH) as f:
         return yaml.safe_load(f)
-
-
-def _get_os_client(endpoint: str, region: str) -> OpenSearch:
-    credentials = boto3.Session().get_credentials()
-    auth = AWSV4SignerAuth(credentials, region, service="aoss")
-    host = endpoint.replace("https://", "").rstrip("/")
-    return OpenSearch(
-        hosts=[{"host": host, "port": 443}],
-        http_auth=auth,
-        use_ssl=True,
-        verify_certs=True,
-        connection_class=RequestsHttpConnection,
-        timeout=30,
-    )
 
 
 def embed_query(text: str, model_id: str, region: str) -> list:
@@ -54,80 +42,69 @@ def retrieve_similar(
     k: int = None,
     min_score: float = None,
     config: dict = None,
-    opensearch_endpoint: str = None,
+    pinecone_api_key: str = None,
 ) -> list:
     """
-    Embed the question and return the top-k most relevant document chunks.
+    Embed the question and return the top-k most relevant document chunks from Pinecone.
 
     Args:
         question: Natural-language question from the user.
         k: Number of results (defaults to config top_k).
         min_score: Minimum cosine similarity score to include.
         config: RAG config dict (loaded from rag_config.yml if not provided).
-        opensearch_endpoint: Override; also reads OPENSEARCH_ENDPOINT env var.
+        pinecone_api_key: Pinecone API key (falls back to PINECONE_API_KEY env var).
 
     Returns:
         List of dicts: [{text, score, metadata}]
     """
+    from pinecone import Pinecone
+
     if config is None:
         config = load_config()
 
     rag_cfg = config["rag"]
-    os_cfg = config.get("opensearch", {})
+    pinecone_cfg = config.get("pinecone", {})
 
     region = rag_cfg.get("region", "us-east-1")
     model_id = rag_cfg["embedding_model"]
-    index_name = os_cfg.get("index_name", rag_cfg["vector_index"])
+    index_name = pinecone_cfg.get("index_name", rag_cfg.get("vector_index", "hazard-risk-docs"))
     top_k = k or rag_cfg.get("top_k", 5)
     score_threshold = min_score if min_score is not None else rag_cfg.get("min_score", 0.0)
 
-    endpoint = (
-        opensearch_endpoint
-        or os.environ.get("OPENSEARCH_ENDPOINT")
-        or os_cfg.get("collection_endpoint", "")
+    api_key = (
+        pinecone_api_key
+        or os.environ.get("PINECONE_API_KEY")
+        or pinecone_cfg.get("api_key", "")
     )
-    if not endpoint:
+    if not api_key:
         raise ValueError(
-            "OpenSearch endpoint required. Set OPENSEARCH_ENDPOINT env var "
-            "or opensearch.collection_endpoint in rag_config.yml"
+            "Pinecone API key required. Set PINECONE_API_KEY env var "
+            "or pinecone.api_key in rag_config.yml"
         )
 
     query_embedding = embed_query(question, model_id, region)
 
-    os_client = _get_os_client(endpoint, region)
-    search_body = {
-        "size": top_k,
-        "query": {
-            "knn": {
-                "embedding": {
-                    "vector": query_embedding,
-                    "k": top_k,
-                }
-            }
-        },
-        "_source": ["text", "metadata"],
-    }
+    pc = Pinecone(api_key=api_key)
+    index = pc.Index(index_name)
+    results = index.query(vector=query_embedding, top_k=top_k, include_metadata=True)
 
-    response = os_client.search(index=index_name, body=search_body)
-    hits = response["hits"]["hits"]
-
-    results = []
-    for hit in hits:
-        score = float(hit["_score"])
+    chunks = []
+    for match in results.matches:
+        score = float(match.score)
         if score < score_threshold:
             continue
-        results.append({
-            "text": hit["_source"]["text"],
+        chunks.append({
+            "text": match.metadata.get("text", ""),
             "score": round(score, 4),
-            "metadata": hit["_source"].get("metadata", {}),
+            "metadata": {k: v for k, v in match.metadata.items() if k != "text"},
         })
 
     logger.info(
         "Retrieved %d chunks (top score=%.4f)",
-        len(results),
-        results[0]["score"] if results else 0.0,
+        len(chunks),
+        chunks[0]["score"] if chunks else 0.0,
     )
-    return results
+    return sorted(chunks, key=lambda x: x["score"], reverse=True)
 
 
 if __name__ == "__main__":
