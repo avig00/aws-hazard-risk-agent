@@ -74,14 +74,61 @@ def _extract_limit(question: str, default: int = 10) -> int:
     return default
 
 
+# Maps user-supplied terms to the canonical hazard_type values in the Gold layer.
+# Gold-layer values: Drought, Heavy Snow, Tropical Storm, Tornado, Heavy Rain,
+# Funnel Cloud, High Wind, Excessive Heat, Thunderstorm Wind, Flash Flood, Flood,
+# Debris Flow, Dust Devil, Heat, Dust Storm, Dense Fog, Hail, Lightning,
+# Strong Wind, Wildfire
+_HAZARD_SYNONYMS: dict[str, str] = {
+    "hurricane":        "Tropical Storm",
+    "tropical storm":   "Tropical Storm",
+    "tropical":         "Tropical Storm",
+    "cyclone":          "Tropical Storm",
+    "typhoon":          "Tropical Storm",
+    "flood":            "Flood",
+    "flooding":         "Flood",
+    "flash flood":      "Flash Flood",
+    "flash flooding":   "Flash Flood",
+    "tornado":          "Tornado",
+    "tornadoes":        "Tornado",
+    "twister":          "Tornado",
+    "wildfire":         "Wildfire",
+    "fire":             "Wildfire",
+    "forest fire":      "Wildfire",
+    "drought":          "Drought",
+    "hail":             "Hail",
+    "hailstorm":        "Hail",
+    "lightning":        "Lightning",
+    "thunderstorm":     "Thunderstorm Wind",
+    "thunder":          "Thunderstorm Wind",
+    "winter storm":     "Heavy Snow",
+    "blizzard":         "Heavy Snow",
+    "snowstorm":        "Heavy Snow",
+    "snow":             "Heavy Snow",
+    "heat wave":        "Excessive Heat",
+    "extreme heat":     "Excessive Heat",
+    "high wind":        "High Wind",
+    "strong wind":      "Strong Wind",
+    "heavy rain":       "Heavy Rain",
+    "debris flow":      "Debris Flow",
+    "landslide":        "Debris Flow",
+    "mudslide":         "Debris Flow",
+    "dust storm":       "Dust Storm",
+    "fog":              "Dense Fog",
+}
+
+
 def _extract_hazard_type(question: str) -> str:
-    """Extract a specific hazard type mentioned in the question."""
-    hazards = ["flood", "hurricane", "tornado", "wildfire", "earthquake",
-               "drought", "hail", "winter storm", "thunderstorm"]
+    """
+    Extract a specific hazard type from the question and normalize it to the
+    canonical Gold-layer value.  Returns 'all' if no hazard is detected.
+    """
     q = question.lower()
-    for h in hazards:
-        if h in q:
-            return h
+    # Sort by length descending so multi-word phrases (e.g. "flash flood") match before
+    # shorter substrings (e.g. "flood")
+    for phrase in sorted(_HAZARD_SYNONYMS, key=len, reverse=True):
+        if phrase in q:
+            return _HAZARD_SYNONYMS[phrase]
     return "all"
 
 

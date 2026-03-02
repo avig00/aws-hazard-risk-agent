@@ -101,6 +101,7 @@ def build_tag_prompt(
     sql_executed: str,
     intent: str,
     row_count: int,
+    data_note: str = "",
 ) -> str:
     """
     Assemble the TAG user message for Bedrock Claude.
@@ -111,6 +112,10 @@ def build_tag_prompt(
         sql_executed: The compiled SQL that was run — shown to Claude for transparency.
         intent:       The matched SQL template name (e.g. 'top_counties_by_risk').
         row_count:    Total rows returned (may exceed what's shown if truncated).
+        data_note:    Optional plain-English note about data limitations detected
+                      upstream (e.g. hazard not filterable, all-zero columns).
+                      When present it is injected before the results so the LLM
+                      can relay it to the user instead of producing a misleading answer.
 
     Returns:
         Formatted prompt string ready to send to Bedrock.
@@ -122,6 +127,11 @@ def build_tag_prompt(
         f"\nCOLUMN DEFINITIONS:\n{col_legend}\n" if col_legend else ""
     )
 
+    data_note_section = (
+        f"\n⚠️  DATA LIMITATION NOTE (must relay to user):\n{data_note}\n"
+        if data_note else ""
+    )
+
     return f"""QUESTION: {question}
 
 QUERY EXECUTED (governed SQL — Gold layer only):
@@ -130,7 +140,7 @@ QUERY EXECUTED (governed SQL — Gold layer only):
 ```
 
 RESULTS ({row_count} rows total):
-{column_section}
+{data_note_section}{column_section}
 {table_text}
 
 ---

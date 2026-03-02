@@ -6,6 +6,11 @@ This is the single entry point used by both the FastAPI /agent endpoint
 and the Streamlit app.
 """
 import logging
+import os
+import re
+import time
+
+import boto3
 
 from agent.router import RoutingDecision, route
 from analytics.query_engine import run_query, run_tag_query
@@ -16,6 +21,104 @@ from rag.retrieval.retrieve import retrieve_similar
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def _extract_county_name(question: str):
+    """Extract a county name or FIPS code from a question. Returns str or None."""
+    # 5-digit FIPS code
+    m = re.search(r"\b(\d{5})\b", question)
+    if m:
+        return m.group(1)
+    # "X County" or "X-Y County" pattern — requires uppercase start (proper noun)
+    m = re.search(
+        r"([A-Z][A-Za-z\-]*(?:\s+[A-Za-z][A-Za-z\-]*)?)\s+[Cc]ounty",
+        question,
+    )
+    if m:
+        return m.group(1).strip()
+    return None
+
+
+def _fetch_county_features(
+    county_identifier: str,
+    region: str = "us-east-1",
+    s3_output: str = None,
+) -> tuple:
+    """
+    Query Athena for the most recent feature row for a county.
+    county_identifier is either a 5-digit FIPS string or a county name fragment.
+    Returns (features_dict, county_name, county_fips).
+    Returns ({}, county_identifier, "") on failure or no results.
+    """
+    if s3_output is None:
+        s3_output = os.environ.get(
+            "ATHENA_OUTPUT_LOCATION",
+            "s3://aws-hazard-risk-vigamogh-dev/hazard/athena-results/",
+        )
+
+    if re.match(r"^\d{5}$", county_identifier):
+        where_clause = f"r.county_fips = '{county_identifier}'"
+    else:
+        safe_name = re.sub(r"[^a-zA-Z \-]", "", county_identifier)[:40].strip()
+        # Exact match — county_dim stores names WITHOUT "County" (e.g. "Harris", "Miami-Dade")
+        where_clause = f"LOWER(d.county_name) = '{safe_name.lower()}'"
+
+    sql = (
+        "SELECT r.*, d.county_name, d.state "
+        "FROM gold_hazard.risk_feature_mart r "
+        "JOIN gold_hazard.county_dim d ON r.county_fips = d.county_fips "
+        f"WHERE {where_clause} "
+        "ORDER BY r.year DESC LIMIT 1"
+    )
+
+    try:
+        client = boto3.client("athena", region_name=region)
+        resp = client.start_query_execution(
+            QueryString=sql,
+            QueryExecutionContext={"Database": "gold_hazard"},
+            ResultConfiguration={"OutputLocation": s3_output},
+        )
+        exec_id = resp["QueryExecutionId"]
+
+        for _ in range(60):
+            status = client.get_query_execution(QueryExecutionId=exec_id)
+            state = status["QueryExecution"]["Status"]["State"]
+            if state in ("SUCCEEDED", "FAILED", "CANCELLED"):
+                break
+            time.sleep(2)
+
+        if state != "SUCCEEDED":
+            logger.warning("Athena county lookup failed: state=%s", state)
+            return {}, county_identifier, ""
+
+        result = client.get_query_results(QueryExecutionId=exec_id)
+        rows = result["ResultSet"]["Rows"]
+        if len(rows) < 2:
+            return {}, county_identifier, ""
+
+        headers = [c["VarCharValue"] for c in rows[0]["Data"]]
+        vals = [c.get("VarCharValue", "") for c in rows[1]["Data"]]
+        row_dict = dict(zip(headers, vals))
+
+        county_name = row_dict.get("county_name", county_identifier)
+        county_fips = row_dict.get("county_fips", "")
+
+        features = {}
+        for k, v in row_dict.items():
+            if v == "":
+                features[k] = None  # becomes NaN in DataFrame; fillna(0) handles it
+            else:
+                try:
+                    features[k] = float(v)
+                except (ValueError, TypeError):
+                    features[k] = v  # keep string for categorical cols (e.g. "state")
+
+        logger.info("Fetched features for county=%s fips=%s", county_name, county_fips)
+        return features, county_name, county_fips
+
+    except Exception as exc:
+        logger.warning("County features lookup error: %s", exc)
+        return {}, county_identifier, ""
 
 
 def run_agent(
@@ -61,10 +164,17 @@ def run_agent(
     # ── Execute each tool ─────────────────────────────────────────────────────
     if "predict" in decision.tools:
         try:
-            pred = predict_risk(
-                features={},
-                endpoint_name=sagemaker_endpoint,
-            )
+            features = {}
+            county_name = ""
+            county_fips = ""
+            county_id = _extract_county_name(question)
+            if county_id:
+                features, county_name, county_fips = _fetch_county_features(county_id)
+            pred = predict_risk(features=features, endpoint_name=sagemaker_endpoint)
+            pred["county_name"] = county_name
+            pred["county_fips"] = county_fips
+            if not county_id:
+                pred["_no_county"] = True
             tool_outputs["predict"] = pred
         except Exception as exc:
             logger.warning("Predict tool failed: %s", exc)
@@ -153,6 +263,28 @@ def run_agent(
             result["answer"] = _fallback_answer(tool_outputs, decision.tools)
         result["sources"] = ask_out.get("citations", [])
 
+    elif "predict" in decision.tools and "query" not in decision.tools and "ask" not in decision.tools:
+        # Pure predict route
+        pred_out = tool_outputs.get("predict", {})
+        if "error" in pred_out:
+            result["answer"] = f"Prediction error: {pred_out['error']}"
+        elif pred_out.get("_no_county"):
+            result["answer"] = (
+                "Please specify a county name to get an ML risk prediction. "
+                "Example: *What is the predicted risk for Harris County, TX?*"
+            )
+        elif "risk_tier" in pred_out:
+            county = pred_out.get("county_name") or pred_out.get("county_fips") or "the county"
+            result["answer"] = (
+                f"**ML Risk Prediction**\n\n"
+                f"Based on the XGBoost classifier trained on NOAA storm history, "
+                f"demographics, and NRI risk scores:\n\n"
+                f"**{county}** → predicted risk tier: **{pred_out['risk_tier']}**"
+            )
+        else:
+            result["answer"] = _fallback_answer(tool_outputs, decision.tools)
+        result["sources"] = []
+
     else:
         result["answer"] = _fallback_answer(tool_outputs, decision.tools)
         result["sources"] = []
@@ -180,8 +312,10 @@ def _fallback_answer(tool_outputs: dict, tools: list) -> str:
         rows = tool_outputs["query"]["results"]
         parts.append(f"Analytics results ({len(rows)} rows returned):")
         parts.append(_format_table_as_text(rows[:5]))
-    if "predict" in tools and "predictions" in tool_outputs.get("predict", {}):
-        parts.append(f"Risk predictions: {tool_outputs['predict']['predictions']}")
+    if "predict" in tools and "risk_tier" in tool_outputs.get("predict", {}):
+        p = tool_outputs["predict"]
+        county = p.get("county_name") or p.get("county_fips") or "County"
+        parts.append(f"ML Prediction: {county} → {p['risk_tier']}")
     if "ask" in tools and tool_outputs.get("ask", {}).get("error"):
         parts.append(f"Retrieval error: {tool_outputs['ask']['error']}")
     return "\n\n".join(parts) if parts else "No results available."

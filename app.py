@@ -10,7 +10,6 @@ Run locally:
 Deploy:
     Connect GitHub repo on share.streamlit.io → set AWS secrets in app settings.
 """
-import json
 import os
 
 import boto3
@@ -56,21 +55,15 @@ def _get_bedrock_client():
 
 
 def bedrock_call(system: str, user_message: str) -> str:
-    """Call Bedrock Claude Sonnet and return the text response."""
+    """Call Bedrock Amazon Nova Lite via Converse API and return the text response."""
     bedrock = _get_bedrock_client()
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 1024,
-        "system": system,
-        "messages": [{"role": "user", "content": user_message}],
-    })
-    response = bedrock.invoke_model(
-        modelId="anthropic.claude-3-sonnet-20240229-v1:0",
-        contentType="application/json",
-        accept="application/json",
-        body=body,
+    response = bedrock.converse(
+        modelId="us.amazon.nova-lite-v1:0",
+        system=[{"text": system}],
+        messages=[{"role": "user", "content": [{"text": user_message}]}],
+        inferenceConfig={"maxTokens": 1024, "temperature": 0.1},
     )
-    return json.loads(response["body"].read())["content"][0]["text"]
+    return response["output"]["message"]["content"][0]["text"]
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
@@ -170,8 +163,9 @@ if prompt := st.chat_input("Ask a hazard risk question…"):
                 render_sql_expander(sql)
 
         # ── Render prediction card ─────────────────────────────────────────
-        if "predict" in tools_used and "predictions" in tool_outputs.get("predict", {}):
-            render_prediction_card(tool_outputs["predict"])
+        pred_out = tool_outputs.get("predict", {})
+        if "predict" in tools_used and "risk_tier" in pred_out and not pred_out.get("_no_county"):
+            render_prediction_card(pred_out)
 
         # ── Render citations ───────────────────────────────────────────────
         if sources:

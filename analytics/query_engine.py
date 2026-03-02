@@ -63,10 +63,11 @@ def _sanitize_params(params: dict) -> dict:
             clean[key] = limit
 
         elif key == "hazard_type":
-            # Only allow lowercase alpha + space
-            if not re.match(r"^[a-z ]+$", str(value)):
+            # Allow alpha, space, and hyphen — covers canonical DB values like
+            # "Tropical Storm", "Flash Flood", "Thunderstorm Wind"
+            if not re.match(r"^[a-zA-Z \-]+$", str(value)):
                 raise ValueError(f"Invalid hazard_type: {value}")
-            clean[key] = str(value).lower()
+            clean[key] = str(value)
 
         elif key == "county_fips_list":
             # Must be a comma-separated list of quoted 5-digit FIPS codes
@@ -195,6 +196,90 @@ def run_query(
     }
 
 
+# Columns in risk_feature_mart that carry NOAA per-event metrics.
+# These are all-hazard aggregates — there is no per-hazard filter on this table.
+_NOAA_METRIC_COLS = [
+    "total_events", "avg_property_damage", "total_fatalities",
+    "fema_property_damage", "fema_claim_count",
+]
+
+# Gold-layer canonical hazard names (from hazard_event_summary_current).
+# Surfaced in data quality notes so the LLM can give the user correct terminology.
+_DB_HAZARD_TYPES = (
+    "Drought, Heavy Snow, Tropical Storm, Tornado, Heavy Rain, Funnel Cloud, "
+    "High Wind, Excessive Heat, Thunderstorm Wind, Flash Flood, Flood, "
+    "Debris Flow, Dust Devil, Heat, Dust Storm, Dense Fog, Hail, Lightning, "
+    "Strong Wind, Wildfire"
+)
+
+
+def _data_quality_note(question: str, results: list, intent_template: str) -> str:
+    """
+    Detect known Gold-layer data limitation patterns and return a plain-English
+    note for the LLM to relay to the user.  Returns "" when no issue detected.
+
+    Two patterns detected:
+    1. User asked about a specific hazard, but risk_feature_mart stores only
+       all-hazard aggregates — per-hazard NOAA event data will be all zeros.
+    2. Any query where all NOAA event/damage columns are zero across all rows.
+    """
+    if not results:
+        return ""
+
+    from analytics.intent_classifier import _HAZARD_SYNONYMS
+
+    q_lower = question.lower()
+    # Identify the hazard the user mentioned and its canonical DB name
+    db_hazard = None
+    user_term = None
+    for phrase in sorted(_HAZARD_SYNONYMS, key=len, reverse=True):
+        if phrase in q_lower:
+            user_term = phrase
+            db_hazard = _HAZARD_SYNONYMS[phrase]
+            break
+
+    # Pattern 1: user named a specific hazard, but ALL SQL templates query risk_feature_mart
+    # which stores aggregate NRI/FEMA metrics across ALL hazard types combined.
+    # There is no WHERE hazard_type filter in any template — results always represent
+    # all-hazard composites regardless of what hazard was mentioned.
+    if db_hazard:
+        return (
+            f"DATA LIMITATION — must tell the user: "
+            f"The user asked about '{user_term}' (Gold-layer canonical term: "
+            f"'{db_hazard}'). All analytics queries run against risk_feature_mart, which "
+            f"stores composite NRI scores (Expected Annual Loss, Social Vulnerability, "
+            f"Resilience) and FEMA declaration counts aggregated across ALL hazard types — "
+            f"it does NOT filter by individual hazard type. "
+            f"The results shown therefore reflect all-hazard risk, NOT '{user_term}'-specific "
+            f"risk. Do NOT attribute the EAL scores or rankings specifically to '{user_term}'. "
+            f"Instead explain: (1) the data shows all-hazard composite risk; "
+            f"(2) '{user_term}' in this dataset is called '{db_hazard}'; "
+            f"(3) per-hazard event breakdowns are available in a separate event summary table "
+            f"but are not surfaced in this query. "
+            f"Gold-layer hazard types: {_DB_HAZARD_TYPES}."
+        )
+
+    # Pattern 2: any template where all NOAA event/damage columns are zero.
+    present_cols = [c for c in _NOAA_METRIC_COLS if c in results[0]]
+    if present_cols:
+        all_zero = all(
+            float(r.get(col) or 0) == 0
+            for col in present_cols
+            for r in results
+        )
+        if all_zero:
+            return (
+                f"DATA LIMITATION — must tell the user: "
+                f"The columns {present_cols} are all zero in these results. "
+                f"The Gold-layer mart stores aggregate NRI scores and FEMA declaration "
+                f"counts but does not carry detailed per-event NOAA damage figures for "
+                f"this query. The NRI expected-loss and FEMA declaration data shown above "
+                f"is still valid and useful."
+            )
+
+    return ""
+
+
 def run_tag_query(
     question: str,
     synthesize_fn,
@@ -205,14 +290,14 @@ def run_tag_query(
     """
     Table Augmented Generation (TAG) pipeline:
     1. Run the governed Athena query via run_query()
-    2. Pass the results + original question to an LLM for narrative synthesis
-    3. Return both the raw data and the synthesized analyst answer
+    2. Detect data quality issues and build a plain-English note for the LLM
+    3. Pass results + note to the LLM for narrative synthesis
+    4. Return both the raw data and the synthesized analyst answer
 
     Args:
         question:      User's natural-language question.
         synthesize_fn: Callable(system_prompt, user_message) → str.
                        Injected to keep query_engine.py free of boto3 imports.
-                       Typically wraps Bedrock Claude (app.py or orchestrator).
         limit:         Max rows to return from Athena.
         s3_output:     S3 path for Athena result staging.
         region:        AWS region.
@@ -224,7 +309,7 @@ def run_tag_query(
     """
     from rag.prompts.tag_template import TAG_SYSTEM_PROMPT, build_tag_prompt
 
-    # Step 1: governed Athena query (unchanged pipeline)
+    # Step 1: governed Athena query
     query_result = run_query(question, limit=limit, s3_output=s3_output, region=region)
 
     results = query_result["results"]
@@ -232,10 +317,23 @@ def run_tag_query(
     intent = query_result["intent"]
     row_count = query_result["row_count"]
 
-    # Step 2: synthesize — skip gracefully if no results or no LLM available
+    # Step 2: graceful no-rows handling
     if not results:
         logger.info("TAG synthesis skipped: no rows returned")
-        return {**query_result, "answer": "The query returned no results.", "tag_enabled": True}
+        return {
+            **query_result,
+            "answer": (
+                "No data was found for this query. The Gold-layer dataset may not "
+                "contain records matching your filters (hazard type, year range, or "
+                "county). Try broadening your search."
+            ),
+            "tag_enabled": True,
+        }
+
+    # Step 3: detect data quality / scope issues; inject a note for the LLM
+    data_note = _data_quality_note(question, results, intent)
+    if data_note:
+        logger.info("Data quality note injected for intent=%s", intent)
 
     user_message = build_tag_prompt(
         question=question,
@@ -243,6 +341,7 @@ def run_tag_query(
         sql_executed=sql,
         intent=intent,
         row_count=row_count,
+        data_note=data_note,
     )
 
     try:

@@ -42,7 +42,7 @@ def test_intent_extracts_limit():
 
 def test_intent_extracts_hazard_type():
     intent = classify_intent("Year-over-year trend for flood events 2015–2023")
-    assert intent.params["hazard_type"] == "flood"
+    assert intent.params["hazard_type"] == "Flood"  # canonical DB value from _HAZARD_SYNONYMS
 
 
 def test_intent_default_hazard_type():

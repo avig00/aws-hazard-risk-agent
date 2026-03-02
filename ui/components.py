@@ -90,19 +90,19 @@ def render_risk_map(results: list) -> None:
 
 
 def render_prediction_card(prediction: dict) -> None:
-    """Display a single county risk prediction as a metric card."""
-    county = prediction.get("county_id", "County")
-    score = prediction.get("prediction")
-    bucket = prediction.get("risk_bucket", "—")
+    """Display a county ML risk prediction as a metric card."""
+    county = prediction.get("county_name") or prediction.get("county_fips") or "County"
+    risk_tier = prediction.get("risk_tier", "—")
 
     color_map = {"LOW": "🟢", "MEDIUM": "🟡", "HIGH": "🔴"}
-    icon = color_map.get(bucket, "⚪")
+    icon = color_map.get(risk_tier, "⚪")
 
+    st.subheader("ML Risk Prediction")
     col1, col2 = st.columns(2)
     with col1:
-        st.metric(label=f"Risk Score — {county}", value=f"{score:,.2f}" if score else "N/A")
+        st.metric(label="County", value=county)
     with col2:
-        st.metric(label="Risk Category", value=f"{icon} {bucket}")
+        st.metric(label="Predicted Risk Tier", value=f"{icon} {risk_tier}")
 
 
 def render_citations(sources: list) -> None:

@@ -7,7 +7,6 @@ Unified Agent API — FastAPI application exposing four endpoints:
   POST /agent    — Orchestrates all tools; routes or combines as needed
   GET  /health   — Health check
 """
-import json
 import logging
 import os
 from pathlib import Path
@@ -65,28 +64,21 @@ class AgentRequest(BaseModel):
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def call_bedrock_claude(system: str, user_message: str, config: dict) -> str:
-    """Invoke Bedrock Claude and return the text response."""
+    """Invoke Bedrock via Converse API and return the text response."""
     llm_cfg = config.get("llm", {})
-    model_id = llm_cfg.get("model_id", "anthropic.claude-3-sonnet-20240229-v1:0")
+    model_id = llm_cfg.get("model_id", "us.amazon.nova-lite-v1:0")
     region = config["rag"].get("region", "us-east-1")
     max_tokens = llm_cfg.get("max_tokens", 1024)
+    temperature = llm_cfg.get("temperature", 0.1)
 
     bedrock = boto3.client("bedrock-runtime", region_name=region)
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": max_tokens,
-        "system": system,
-        "messages": [{"role": "user", "content": user_message}],
-    })
-
-    response = bedrock.invoke_model(
+    response = bedrock.converse(
         modelId=model_id,
-        contentType="application/json",
-        accept="application/json",
-        body=body,
+        system=[{"text": system}],
+        messages=[{"role": "user", "content": [{"text": user_message}]}],
+        inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
     )
-    result = json.loads(response["body"].read())
-    return result["content"][0]["text"]
+    return response["output"]["message"]["content"][0]["text"]
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────

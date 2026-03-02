@@ -50,7 +50,7 @@ def test_router_non_hybrid():
 
 @patch("agent.orchestrator.retrieve_similar")
 @patch("agent.orchestrator.run_query")
-@patch("agent.orchestrator.predict_from_endpoint")
+@patch("agent.orchestrator.predict_risk")
 def test_orchestrator_query_route(mock_predict, mock_query, mock_retrieve):
     """Analytics question → only /query tool is called."""
     mock_query.return_value = {
@@ -101,7 +101,7 @@ def test_orchestrator_ask_route(mock_query, mock_retrieve):
 
 @patch("agent.orchestrator.retrieve_similar")
 @patch("agent.orchestrator.run_query")
-@patch("agent.orchestrator.predict_from_endpoint")
+@patch("agent.orchestrator.predict_risk")
 def test_orchestrator_returns_structured_response(mock_predict, mock_query, mock_retrieve):
     """Response must always include required keys."""
     mock_query.return_value = {"results": [], "sql_executed": "", "intent": "top_counties_by_risk"}
