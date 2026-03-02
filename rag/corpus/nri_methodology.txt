@@ -1,0 +1,99 @@
+FEMA National Risk Index (NRI) — Methodology and Expected Annual Loss
+
+OVERVIEW
+
+The National Risk Index (NRI) is a dataset and online tool developed by FEMA that identifies
+communities most at risk for 18 natural hazards. The NRI provides risk, expected annual loss,
+social vulnerability, and community resilience scores at the county and census tract level for
+the contiguous United States.
+
+EXPECTED ANNUAL LOSS (EAL)
+
+Expected Annual Loss is a core metric in the NRI representing the average economic loss in
+dollars resulting from natural hazards each year. EAL is calculated separately for buildings,
+agriculture, and population, then combined into a composite score.
+
+The formula for Expected Annual Loss is:
+
+    EAL = Sum over all hazards of (Exposure × Annualized Frequency × Historic Loss Ratio)
+
+Where:
+- Exposure: The total value of buildings, agricultural output, or population at risk
+- Annualized Frequency: The expected number of hazard events per year based on historical records
+- Historic Loss Ratio: The fraction of exposure typically damaged per event, derived from FEMA's
+  National Flood Insurance Program, USDA crop loss data, and NOAA storm damage reports
+
+EAL COMPONENTS BY CATEGORY
+
+Building Exposure: Uses U.S. Census Bureau residential building counts multiplied by replacement
+costs from RSMeans construction cost data. Commercial and industrial buildings use Dun & Bradstreet
+employment data as a proxy.
+
+Agricultural Exposure: Derived from USDA National Agricultural Statistics Service (NASS) cropland
+data, including commodity values and irrigation infrastructure.
+
+Population Exposure: Combines U.S. Census population counts with FEMA's value of statistical life
+(VSL) methodology — typically $7.6 million per life for risk calculations.
+
+HAZARDS COVERED IN THE NRI
+
+The 18 natural hazards assessed in the NRI are:
+1. Avalanche
+2. Coastal Flooding
+3. Cold Wave
+4. Drought
+5. Earthquake
+6. Hail
+7. Heat Wave
+8. Hurricane
+9. Ice Storm
+10. Landslide
+11. Lightning
+12. Riverine Flooding
+13. Strong Wind
+14. Tornado
+15. Tsunami
+16. Volcanic Activity
+17. Wildfire
+18. Winter Weather
+
+RISK SCORE CALCULATION
+
+The NRI Risk Score combines three composite indices:
+- Expected Annual Loss (hazard + exposure)
+- Social Vulnerability (from CDC/ATSDR Social Vulnerability Index)
+- Community Resilience (from U.S. Census Bureau Community Resilience Estimates)
+
+Risk Score = EAL × Social Vulnerability Factor × (1 / Community Resilience Factor)
+
+Higher social vulnerability amplifies risk because disadvantaged communities have fewer resources
+to prepare, respond, and recover. Higher community resilience reduces effective risk.
+
+PERCENTILE RANKINGS
+
+Counties are ranked nationally on a 0–100 percentile scale for each metric. A county at the 90th
+percentile for risk has higher risk than 90% of U.S. counties. FEMA uses five risk tiers:
+- Very High: 90th–100th percentile
+- High: 75th–90th percentile
+- Relatively High: 50th–75th percentile
+- Relatively Low: 25th–50th percentile
+- Very Low: 0–25th percentile
+
+DATA SOURCES
+
+- FEMA National Flood Insurance Program (NFIP) claims data
+- NOAA National Centers for Environmental Information storm events database
+- USGS earthquake catalog and ShakeMap
+- USDA cropland data layers and crop insurance records
+- U.S. Census Bureau American Community Survey
+- CDC Social Vulnerability Index (SVI)
+- U.S. Census Community Resilience Estimates
+
+LIMITATIONS
+
+The NRI represents average annual conditions and does not predict specific future events. It does
+not account for climate change projections, future land use changes, or dynamic population shifts.
+EAL estimates are based on historical loss records which may underrepresent rare, high-severity
+events. Counties with few historical events may have underestimated risk scores.
+
+For more information: https://hazards.fema.gov/nri/

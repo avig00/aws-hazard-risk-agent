@@ -9,7 +9,7 @@ import logging
 
 from agent.router import RoutingDecision, route
 from analytics.query_engine import run_query, run_tag_query
-from ml.inference.inference_service import predict_from_endpoint
+from ml.inference.inference_service import predict_risk
 from rag.prompts.ask_template import SYSTEM_PROMPT, build_ask_prompt, build_citations
 from rag.prompts.tag_template import TAG_SYSTEM_PROMPT, build_tag_prompt
 from rag.retrieval.retrieve import retrieve_similar
@@ -61,8 +61,8 @@ def run_agent(
     # ── Execute each tool ─────────────────────────────────────────────────────
     if "predict" in decision.tools:
         try:
-            pred = predict_from_endpoint(
-                payload={"instances": [{}]},
+            pred = predict_risk(
+                features={},
                 endpoint_name=sagemaker_endpoint,
             )
             tool_outputs["predict"] = pred

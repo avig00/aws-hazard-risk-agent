@@ -1,0 +1,127 @@
+USDA Forest Service / FEMA — Wildfire Risk Assessment for Western United States Counties
+
+OVERVIEW
+
+Wildfire is one of the fastest-growing natural hazard threats in the United States. The
+NRI identifies wildfire as the primary hazard for hundreds of western counties. The
+Wildland-Urban Interface (WUI) — the zone where human development meets or intermingles
+with unmanaged wildland vegetation — now encompasses approximately 46 million homes and
+30% of all U.S. housing units.
+
+Between 2000 and 2023, the U.S. experienced over 100,000 wildfires per year on average,
+burning 6–10 million acres annually. The economic cost has escalated dramatically, from
+roughly $1–2 billion annually in the 2000s to $10–20 billion in the 2020s.
+
+CRITICAL WILDFIRE COUNTIES
+
+Los Angeles County, California (FIPS: 06037):
+Los Angeles County represents the largest wildfire exposure in the country in absolute
+dollar terms, combining a massive building stock with fire-prone chaparral terrain.
+
+Key vulnerability factors:
+1. Santa Ana winds: Seasonal offshore winds (October–December) can exceed 80 mph,
+   driving fires rapidly through dry chaparral at speeds of 1–2 miles per hour
+2. Mediterranean climate: Hot, dry summers cure vegetation to low moisture levels
+   (below 10%), creating explosive fire conditions
+3. WUI density: The Santa Monica Mountains, San Gabriel Mountains, and Santa Ana Mountains
+   all border heavily populated valleys with limited evacuation routes
+
+Notable events:
+- 2018 Woolsey Fire: 96,949 acres, 3 deaths, 1,643 structures destroyed, $6 billion loss;
+  forced evacuation of 295,000 residents including Malibu and Calabasas
+- 2020 Bobcat Fire: 115,796 acres in the Angeles National Forest, $1.4 billion damage
+- 2025 Palisades and Eaton Fires (January 2025): Combined destruction of over 12,000
+  structures in Pacific Palisades and Altadena; estimated $50+ billion economic loss;
+  deadliest California fire in a century
+
+NRI Wildfire EAL for Los Angeles County: $2.4 billion/year
+NRI Wildfire Risk Percentile: 97th nationally
+
+Mariposa County, California (FIPS: 06043):
+Home to Yosemite Valley, Mariposa County is the epicenter of Sierra Nevada wildfire risk.
+
+- 2018 Ferguson Fire: Forced Yosemite Valley closure, $8.8 million suppression cost
+- NRI Wildfire EAL per capita: Among the highest in California
+
+Larimer County, Colorado (FIPS: 08069):
+The Colorado Front Range faces increasing wildfire pressure from drought and beetle kill.
+
+- 2021 Cameron Peak Fire: 208,913 acres — largest fire in Colorado history; $200 million
+- 2021 East Troublesome Fire: 193,812 acres, 2 deaths, burned into Rocky Mountain National Park
+- 2021 Marshall Fire (December 2021): 6,026 acres in Boulder County suburb, 1,084 homes
+  destroyed — largest structure loss in Colorado history; driven by 100 mph wind gusts
+  over drought-cured grass, demonstrating that WUI fires can occur even in cold months
+
+WILDFIRE RISK FACTORS BY COUNTY TYPE
+
+Chaparral/Shrubland Counties (CA, AZ, NM):
+- Fire return interval historically 30–100 years
+- Post-suppression era fuel accumulation has compressed effective fire cycles
+- Fast-moving surface fires with spotting ahead of the fire front
+
+Forested Mountain Counties (CA Sierra, CO Rockies, OR/WA Cascades):
+- Bark beetle-killed trees (blue stain fungus from Dendroctonus ponderosae) create
+  massive standing dead fuel loads — over 130 million dead trees in California by 2019
+- Crown fires in dense forest can release 10,000+ BTU/ft² — suppression is often impossible
+- High-severity fires leave watersheds vulnerable to post-fire debris flows
+
+Grassland Counties (Great Plains/Intermountain West):
+- Fast-spreading grass fires can travel 10+ miles per day
+- Difficult to defend: fire lines are difficult to hold in grass
+- Kansas, Oklahoma, and Nebraska have experienced large grass fires that devastated farms
+
+CLIMATE DRIVERS OF INCREASING WILDFIRE RISK
+
+The relationship between climate variables and wildfire activity is well-established:
+
+1. Drought: Palmer Drought Severity Index below -2.0 correlates with 4× higher burn area
+   Consecutive dry years compound fuel dryness progressively
+
+2. Temperature: Each 1°C increase in average summer temperature is associated with a
+   12% increase in fire season length
+
+3. Vapor Pressure Deficit (VPD): High VPD (low atmospheric moisture) is the single
+   strongest predictor of daily fire weather; VPD above 25 hPa creates extreme fire
+   weather conditions
+
+4. Wind: Fire spread is proportional to wind speed squared; Santa Ana and Diablo wind
+   events (California), Chinook/Foehn winds (Colorado) are key extreme fire weather drivers
+
+5. Snow drought: Reduced mountain snowpack means lower summer soil moisture, extending
+   the fire season into fall
+
+ECONOMIC IMPACT ANALYSIS (NRI DATA)
+
+Top 10 counties by Wildfire Expected Annual Loss (NRI 2023):
+1. Los Angeles County, CA: $2,412,000,000
+2. Riverside County, CA: $894,000,000
+3. San Bernardino County, CA: $847,000,000
+4. San Diego County, CA: $682,000,000
+5. Shasta County, CA: $421,000,000
+6. Butte County, CA: $392,000,000 (Paradise/Camp Fire)
+7. El Dorado County, CA: $341,000,000
+8. Madera County, CA: $318,000,000
+9. Larimer County, CO: $271,000,000
+10. Placer County, CA: $243,000,000
+
+California dominates the list due to the combination of high property values, dense WUI
+development, and severe fire weather. Note that Butte County's ranking reflects the
+2018 Camp Fire — the deadliest and most destructive California wildfire on record,
+which destroyed the town of Paradise and killed 85 people.
+
+FEMA WILDFIRE MITIGATION RECOMMENDATIONS
+
+1. Defensible space: Clear 0–30 feet of Zone 1 (ember-resistant) and 30–100 feet of
+   Zone 2 (reduced fuel) around all structures in WUI areas
+
+2. Home hardening: Replace wood shake roofs with Class A fire-rated materials; install
+   ember-resistant vents; use dual-pane or tempered glass windows; enclose eaves
+
+3. Community Wildfire Protection Plans (CWPPs): Collaborative risk assessments developed
+   with fire agencies, local governments, and homeowners identify priority fuel treatment areas
+
+4. Ignition-resistant communities: Utility pole replacement, undergrounding power lines
+   in high-risk corridors, public land prescribed burn programs
+
+5. Insurance: FEMA recommends all WUI homeowners carry structure replacement cost coverage
+   with extended replacement cost endorsements given post-fire construction cost spikes

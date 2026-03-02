@@ -34,7 +34,7 @@ resource "aws_iam_role_policy" "sagemaker_s3" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["s3:GetObject", "s3:PutObject", "s3:ListBucket", "s3:DeleteObject"]
-      Resource = ["arn:aws:s3:::hazard", "arn:aws:s3:::hazard/*"]
+      Resource = ["arn:aws:s3:::aws-hazard-risk-vigamogh-dev", "arn:aws:s3:::aws-hazard-risk-vigamogh-dev/*"]
     }]
   })
 }
@@ -141,7 +141,7 @@ resource "aws_iam_role_policy" "ecs_task_athena" {
       {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject", "s3:ListBucket"]
-        Resource = ["arn:aws:s3:::hazard", "arn:aws:s3:::hazard/*"]
+        Resource = ["arn:aws:s3:::aws-hazard-risk-vigamogh-dev", "arn:aws:s3:::aws-hazard-risk-vigamogh-dev/*"]
       },
     ]
   })

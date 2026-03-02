@@ -11,10 +11,29 @@ import time
 from pathlib import Path
 
 import boto3
-import awswrangler as wr
 import pandas as pd
 import yaml
 from sklearn.model_selection import train_test_split
+
+S3_CLIENT = None
+
+
+def _s3():
+    global S3_CLIENT
+    if S3_CLIENT is None:
+        S3_CLIENT = boto3.client("s3", region_name="us-east-1")
+    return S3_CLIENT
+
+
+def _s3_put_parquet(df: pd.DataFrame, s3_path: str) -> None:
+    """Write DataFrame as Parquet to S3 without awswrangler (avoids Ray)."""
+    # s3_path format: s3://bucket/key
+    _, _, rest = s3_path.partition("s3://")
+    bucket, _, key = rest.partition("/")
+    buf = io.BytesIO()
+    df.to_parquet(buf, index=False)
+    _s3().put_object(Bucket=bucket, Key=key, Body=buf.getvalue())
+    logger.info("Wrote s3://%s/%s (%d bytes)", bucket, key, buf.tell())
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -76,42 +95,143 @@ def pull_gold_data(database: str, table: str) -> pd.DataFrame:
     to build a cross-sectional dataset: one row per county.
     This prevents trivial autoregressive prediction and produces a meaningful model.
     """
-    logger.info("Querying Athena: %s.%s (cross-sectional aggregate)", database, table)
+    logger.info("Querying Athena: cross-sectional from risk_feature_mart_current + hazard_event_summary_current")
     query = f"""
+        WITH base AS (
+            -- Cross-sectional FEMA/demographic features from risk_feature_mart_current
+            SELECT
+                r.county_fips,
+                d.state,
+                SUM(r.fema_valid_registrations)          AS fema_valid_registrations,
+                SUM(r.fema_total_damage)                 AS fema_total_damage,
+                SUM(r.fema_total_approved_ihp_amount)    AS fema_total_approved_ihp_amount,
+                SUM(r.fema_declaration_count)            AS fema_declaration_count,
+                SUM(r.fema_repair_replace_amount)        AS fema_repair_replace_amount,
+                SUM(r.fema_rental_amount)                AS fema_rental_amount,
+                SUM(r.fema_other_needs_amount)           AS fema_other_needs_amount,
+                SUM(r.fema_total_inspected)              AS fema_total_inspected,
+                AVG(r.population_total)                  AS population_total,
+                AVG(r.median_household_income)           AS median_household_income,
+                AVG(r.median_home_value)                 AS median_home_value,
+                AVG(r.in_labor_force)                    AS in_labor_force,
+                AVG(r.unemployed)                        AS unemployed,
+                AVG(r.education_universe_total)          AS education_universe_total,
+                AVG(r.high_school_grad)                  AS high_school_grad,
+                AVG(r.bachelors)                         AS bachelors,
+                AVG(r.graduate_degree)                   AS graduate_degree,
+                MAX(r.nri_eal_score)                     AS nri_eal_score,
+                MAX(r.nri_risk_score)                    AS nri_risk_score,
+                MAX(r.nri_sovi_score)                    AS nri_sovi_score,
+                MAX(r.nri_resl_score)                    AS nri_resl_score
+            FROM {database}.risk_feature_mart_current r
+            LEFT JOIN {database}.county_dim d ON r.county_fips = d.county_fips
+            WHERE r.nri_eal_score IS NOT NULL
+            GROUP BY r.county_fips, d.state
+        ),
+        events AS (
+            -- Per-hazard-type event pivots from hazard_event_summary_current
+            -- Including total NOAA property damage (from NOAA estimates, independent of FEMA)
+            SELECT
+                county_fips,
+                SUM(event_count)                                              AS noaa_event_count,
+                SUM(total_fatalities)                                         AS noaa_total_fatalities,
+                SUM(total_injuries)                                           AS noaa_total_injuries,
+                AVG(avg_property_damage)                                      AS noaa_avg_property_damage,
+                -- Total NOAA property damage estimate (events × avg_damage per type)
+                SUM(CAST(event_count AS double) * COALESCE(avg_property_damage, 0)) AS noaa_total_property_damage,
+                -- Flood-related
+                SUM(CASE WHEN hazard_type IN ('Flood','Flash Flood','Heavy Rain')
+                         THEN event_count ELSE 0 END)                         AS flood_events,
+                SUM(CASE WHEN hazard_type IN ('Flood','Flash Flood','Heavy Rain')
+                         THEN CAST(event_count AS double) * COALESCE(avg_property_damage,0)
+                         ELSE 0 END)                                          AS flood_total_damage,
+                -- Wind events
+                SUM(CASE WHEN hazard_type IN ('High Wind','Strong Wind','Thunderstorm Wind')
+                         THEN event_count ELSE 0 END)                         AS wind_events,
+                SUM(CASE WHEN hazard_type IN ('High Wind','Strong Wind','Thunderstorm Wind')
+                         THEN CAST(event_count AS double) * COALESCE(avg_property_damage,0)
+                         ELSE 0 END)                                          AS wind_total_damage,
+                -- Tornado
+                SUM(CASE WHEN hazard_type IN ('Tornado','Funnel Cloud')
+                         THEN event_count ELSE 0 END)                         AS tornado_events,
+                SUM(CASE WHEN hazard_type IN ('Tornado','Funnel Cloud')
+                         THEN CAST(event_count AS double) * COALESCE(avg_property_damage,0)
+                         ELSE 0 END)                                          AS tornado_total_damage,
+                -- Hail (second-highest event volume — now includes damage total)
+                SUM(CASE WHEN hazard_type = 'Hail'
+                         THEN event_count ELSE 0 END)                         AS hail_events,
+                SUM(CASE WHEN hazard_type = 'Hail'
+                         THEN CAST(event_count AS double) * COALESCE(avg_property_damage,0)
+                         ELSE 0 END)                                          AS hail_total_damage,
+                -- Lightning (6 K+ events — storm intensity proxy)
+                SUM(CASE WHEN hazard_type = 'Lightning'
+                         THEN event_count ELSE 0 END)                         AS lightning_events,
+                SUM(CASE WHEN hazard_type = 'Lightning'
+                         THEN CAST(event_count AS double) * COALESCE(avg_property_damage,0)
+                         ELSE 0 END)                                          AS lightning_total_damage,
+                -- Debris Flow (1 400+ events — slope/wildfire-adjacent risk)
+                SUM(CASE WHEN hazard_type = 'Debris Flow'
+                         THEN event_count ELSE 0 END)                         AS debris_flow_events,
+                SUM(CASE WHEN hazard_type = 'Debris Flow'
+                         THEN CAST(event_count AS double) * COALESCE(avg_property_damage,0)
+                         ELSE 0 END)                                          AS debris_flow_total_damage,
+                -- Wildfire
+                SUM(CASE WHEN hazard_type = 'Wildfire'
+                         THEN event_count ELSE 0 END)                         AS wildfire_events,
+                SUM(CASE WHEN hazard_type = 'Wildfire'
+                         THEN CAST(event_count AS double) * COALESCE(avg_property_damage,0)
+                         ELSE 0 END)                                          AS wildfire_total_damage,
+                -- Heat
+                SUM(CASE WHEN hazard_type IN ('Excessive Heat','Heat')
+                         THEN event_count ELSE 0 END)                         AS heat_events,
+                -- Tropical
+                SUM(CASE WHEN hazard_type = 'Tropical Storm'
+                         THEN event_count ELSE 0 END)                         AS tropical_events,
+                SUM(CASE WHEN hazard_type = 'Tropical Storm'
+                         THEN CAST(event_count AS double) * COALESCE(avg_property_damage,0)
+                         ELSE 0 END)                                          AS tropical_total_damage,
+                -- Winter
+                SUM(CASE WHEN hazard_type = 'Heavy Snow'
+                         THEN event_count ELSE 0 END)                         AS winter_events
+            FROM {database}.hazard_event_summary_current
+            GROUP BY county_fips
+        )
         SELECT
-            county_fips,
-            -- NOAA event totals across all years
-            SUM(noaa_event_count)           AS noaa_event_count,
-            SUM(noaa_total_fatalities)      AS noaa_total_fatalities,
-            SUM(noaa_total_injuries)        AS noaa_total_injuries,
-            AVG(noaa_avg_property_damage)   AS noaa_avg_property_damage,
-            -- FEMA assistance totals across all years
-            SUM(fema_valid_registrations)   AS fema_valid_registrations,
-            SUM(fema_total_damage)          AS fema_total_damage,
-            SUM(fema_total_approved_ihp_amount) AS fema_total_approved_ihp_amount,
-            SUM(fema_declaration_count)     AS fema_declaration_count,
-            SUM(fema_repair_replace_amount) AS fema_repair_replace_amount,
-            SUM(fema_rental_amount)         AS fema_rental_amount,
-            SUM(fema_other_needs_amount)    AS fema_other_needs_amount,
-            SUM(fema_total_inspected)       AS fema_total_inspected,
-            -- Socioeconomic (stable, use latest available)
-            AVG(population_total)           AS population_total,
-            AVG(median_household_income)    AS median_household_income,
-            AVG(median_home_value)          AS median_home_value,
-            AVG(in_labor_force)             AS in_labor_force,
-            AVG(unemployed)                 AS unemployed,
-            AVG(high_school_grad)           AS high_school_grad,
-            AVG(bachelors)                  AS bachelors,
-            AVG(graduate_degree)            AS graduate_degree,
-            -- NRI sub-scores (static, take max — all values equal per county)
-            MAX(nri_sovi_score)             AS nri_sovi_score,
-            MAX(nri_resl_score)             AS nri_resl_score,
-            -- Target: static NRI EAL score (same value per county)
-            MAX(nri_eal_score)              AS nri_eal_score
-        FROM {database}.{table}
-        WHERE nri_eal_score IS NOT NULL
-        GROUP BY county_fips
-        ORDER BY county_fips
+            b.*,
+            COALESCE(e.noaa_event_count, 0)            AS noaa_event_count,
+            COALESCE(e.noaa_total_fatalities, 0)       AS noaa_total_fatalities,
+            COALESCE(e.noaa_total_injuries, 0)         AS noaa_total_injuries,
+            COALESCE(e.noaa_avg_property_damage, 0)    AS noaa_avg_property_damage,
+            -- Total NOAA damage (independent of FEMA — key predictor)
+            COALESCE(e.noaa_total_property_damage, 0)  AS noaa_total_property_damage,
+            -- Per-hazard-type counts
+            COALESCE(e.flood_events, 0)                AS flood_events,
+            COALESCE(e.flood_total_damage, 0)          AS flood_total_damage,
+            COALESCE(e.wind_events, 0)                 AS wind_events,
+            COALESCE(e.wind_total_damage, 0)           AS wind_total_damage,
+            COALESCE(e.tornado_events, 0)              AS tornado_events,
+            COALESCE(e.tornado_total_damage, 0)        AS tornado_total_damage,
+            COALESCE(e.hail_events, 0)                 AS hail_events,
+            COALESCE(e.hail_total_damage, 0)           AS hail_total_damage,
+            COALESCE(e.lightning_events, 0)            AS lightning_events,
+            COALESCE(e.lightning_total_damage, 0)      AS lightning_total_damage,
+            COALESCE(e.debris_flow_events, 0)          AS debris_flow_events,
+            COALESCE(e.debris_flow_total_damage, 0)    AS debris_flow_total_damage,
+            COALESCE(e.wildfire_events, 0)             AS wildfire_events,
+            COALESCE(e.wildfire_total_damage, 0)       AS wildfire_total_damage,
+            COALESCE(e.heat_events, 0)                 AS heat_events,
+            COALESCE(e.tropical_events, 0)             AS tropical_events,
+            COALESCE(e.tropical_total_damage, 0)       AS tropical_total_damage,
+            COALESCE(e.winter_events, 0)               AS winter_events,
+            CASE WHEN b.in_labor_force > 0
+                 THEN b.unemployed / b.in_labor_force END               AS unemployment_rate,
+            CASE WHEN b.education_universe_total > 0
+                 THEN b.bachelors / b.education_universe_total END       AS bachelors_rate,
+            CASE WHEN b.population_total > 0
+                 THEN COALESCE(e.noaa_event_count,0) / b.population_total END AS events_per_capita
+        FROM base b
+        LEFT JOIN events e ON b.county_fips = e.county_fips
+        ORDER BY b.county_fips
     """
     df = _run_athena_query(query, database)
     logger.info("Cross-sectional dataset: %d counties, %d columns", len(df), len(df.columns))
@@ -119,14 +239,24 @@ def pull_gold_data(database: str, table: str) -> pd.DataFrame:
 
 
 def add_risk_bucket(df: pd.DataFrame, target_col: str) -> pd.DataFrame:
-    """Bin the continuous target into LOW/MEDIUM/HIGH for stratified splitting."""
+    """Bin the continuous target into LOW/MEDIUM/HIGH for stratified splitting.
+
+    Falls back to rank-based tertiles when many ties (e.g., many zero-damage counties)
+    prevent qcut from forming 3 distinct quantile bins.
+    """
     df = df.copy()
-    df["risk_bucket"] = pd.qcut(
-        df[target_col],
-        q=3,
-        labels=["LOW", "MEDIUM", "HIGH"],
-        duplicates="drop",
-    )
+    labels = ["LOW", "MEDIUM", "HIGH"]
+    try:
+        df["risk_bucket"] = pd.qcut(
+            df[target_col], q=len(labels), labels=labels, duplicates="drop"
+        )
+    except ValueError:
+        # Too many duplicate values — use rank-based equal-count tertiles
+        df["risk_bucket"] = pd.cut(
+            df[target_col].rank(method="first"),
+            bins=len(labels),
+            labels=labels,
+        )
     return df
 
 
@@ -154,8 +284,8 @@ def split_and_save(
 
     is_s3 = output_dir.startswith("s3://")
     if is_s3:
-        wr.s3.to_parquet(train_df, path=f"{output_dir}train.parquet")
-        wr.s3.to_parquet(test_df, path=f"{output_dir}test.parquet")
+        _s3_put_parquet(train_df, f"{output_dir}train.parquet")
+        _s3_put_parquet(test_df, f"{output_dir}test.parquet")
     else:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         train_df.to_parquet(f"{output_dir}/train.parquet", index=False)
@@ -170,10 +300,9 @@ def save_feature_list(feature_cols: list, target_col: str, output_dir: str) -> N
     schema = {"features": feature_cols, "target": target_col}
     is_s3 = output_dir.startswith("s3://")
     if is_s3:
-        wr.s3.to_json(
-            pd.DataFrame([schema]),
-            path=f"{output_dir}feature_list.json",
-        )
+        _, _, rest = f"{output_dir}feature_list.json".partition("s3://")
+        bucket, _, key = rest.partition("/")
+        _s3().put_object(Bucket=bucket, Key=key, Body=json.dumps(schema, indent=2).encode())
     else:
         with open(f"{output_dir}/feature_list.json", "w") as f:
             json.dump(schema, f, indent=2)

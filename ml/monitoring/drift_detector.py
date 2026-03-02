@@ -6,11 +6,12 @@ and recent inference distributions (from SageMaker data capture logs).
 
 Run on a daily/weekly schedule via EventBridge → Lambda or a cron job.
 """
+import io
 import json
 import logging
+import os
 from pathlib import Path
 
-import awswrangler as wr
 import boto3
 import numpy as np
 import pandas as pd
@@ -38,7 +39,10 @@ def compute_baseline_stats(train_path: str, feature_cols: list) -> dict:
     Call once after initial model training.
     """
     if train_path.startswith("s3://"):
-        df = wr.s3.read_parquet(path=train_path)
+        bucket, key = train_path.replace("s3://", "").split("/", 1)
+        s3 = boto3.client("s3")
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        df = pd.read_parquet(io.BytesIO(obj["Body"].read()))
     else:
         df = pd.read_parquet(train_path)
 
@@ -91,13 +95,26 @@ def load_recent_capture(days_back: int = 1) -> pd.DataFrame:
     cutoff = datetime.utcnow() - timedelta(days=days_back)
     logger.info("Loading capture data since %s", cutoff.isoformat())
 
+    # NOTE: Serverless Inference does not support DataCapture.
+    # Drift is computed from Athena prediction logs instead when available.
     try:
-        df = wr.s3.read_json(
-            path=CAPTURE_PATH,
-            boto3_session=boto3.Session(),
-        )
-        df["capture_time"] = pd.to_datetime(df.get("eventMetadata", {}).get("eventId", ""))
-        return df
+        s3 = boto3.client("s3")
+        bucket, prefix = CAPTURE_PATH.replace("s3://", "").split("/", 1)
+        paginator = s3.get_paginator("list_objects_v2")
+        frames = []
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                resp = s3.get_object(Bucket=bucket, Key=obj["Key"])
+                lines = resp["Body"].read().decode("utf-8").splitlines()
+                for line in lines:
+                    try:
+                        frames.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+        if frames:
+            return pd.DataFrame(frames)
+        logger.info("No capture data found at %s", CAPTURE_PATH)
+        return pd.DataFrame()
     except Exception as exc:
         logger.warning("Failed to load capture data: %s", exc)
         return pd.DataFrame()

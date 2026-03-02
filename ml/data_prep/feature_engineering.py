@@ -82,8 +82,11 @@ def encode_categoricals(df: pd.DataFrame, columns: list) -> pd.DataFrame:
 
 
 def drop_non_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove identifier/metadata columns that should not be model inputs."""
-    drop_cols = ["county_name", "state_name", "geometry", "risk_bucket"]
+    """Remove identifier/metadata columns that should not be model inputs.
+
+    Note: risk_bucket is kept — prepare_xy excludes it from X via the passthrough set.
+    """
+    drop_cols = ["county_name", "state_name", "geometry"]
     df = df.drop(columns=[c for c in drop_cols if c in df.columns], errors="ignore")
     return df
 

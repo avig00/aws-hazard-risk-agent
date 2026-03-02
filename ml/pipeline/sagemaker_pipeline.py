@@ -1,11 +1,11 @@
 """
-SageMaker Pipeline: 4-step ML workflow for the Hazard Risk model.
+SageMaker Pipeline: 4-step ML workflow for the Hazard Risk classifier.
 
 Steps:
   1. ProcessingStep  — pull Gold data from Athena, run feature engineering
-  2. TrainingStep    — XGBoost training, log params/metrics to MLflow
-  3. EvaluationStep  — compute RMSE/R²/MAE, write evaluation.json
-  4. ConditionStep   — register model only if RMSE <= threshold
+  2. TrainingStep    — XGBoost multi-class classification, log to MLflow
+  3. EvaluationStep  — compute accuracy/F1/balanced-accuracy, write evaluation.json
+  4. ConditionStep   — register model only if balanced_accuracy >= threshold
 
 Usage:
     python ml/pipeline/sagemaker_pipeline.py --action create   # upsert pipeline definition
@@ -23,7 +23,7 @@ from sagemaker.inputs import TrainingInput
 from sagemaker.processing import ProcessingInput, ProcessingOutput
 from sagemaker.sklearn.processing import SKLearnProcessor
 from sagemaker.workflow.condition_step import ConditionStep
-from sagemaker.workflow.conditions import ConditionLessThanOrEqualTo
+from sagemaker.workflow.conditions import ConditionGreaterThanOrEqualTo
 from sagemaker.workflow.functions import JsonGet
 from sagemaker.workflow.model_step import ModelStep
 from sagemaker.workflow.parameters import ParameterFloat, ParameterString
@@ -57,9 +57,12 @@ def get_pipeline(role_arn: str, bucket: str) -> Pipeline:
     # Pipeline parameters (overridable at execution time)
     input_data_uri = ParameterString(
         name="InputDataUri",
-        default_value=f"s3://{bucket}/gold/risk_feature_mart/",
+        default_value=f"s3://{bucket}/hazard/ml/features/",
     )
-    rmse_threshold = ParameterFloat(name="RmseThreshold", default_value=15000.0)
+    accuracy_threshold = ParameterFloat(
+        name="AccuracyThreshold",
+        default_value=0.60,  # register model only if balanced_accuracy >= 60%
+    )
 
     # ── Step 1: Data Prep ────────────────────────────────────────────────────
     processor = SKLearnProcessor(
@@ -79,12 +82,12 @@ def get_pipeline(role_arn: str, bucket: str) -> Pipeline:
             ProcessingOutput(
                 output_name="train",
                 source="/opt/ml/processing/output/train",
-                destination=f"s3://{bucket}/ml/features/train/",
+                destination=f"s3://{bucket}/hazard/ml/features/train/",
             ),
             ProcessingOutput(
                 output_name="test",
                 source="/opt/ml/processing/output/test",
-                destination=f"s3://{bucket}/ml/features/test/",
+                destination=f"s3://{bucket}/hazard/ml/features/test/",
             ),
         ],
         code="ml/data_prep/build_training_data.py",
@@ -103,9 +106,13 @@ def get_pipeline(role_arn: str, bucket: str) -> Pipeline:
             "max_depth": model_cfg["max_depth"],
             "learning_rate": model_cfg["learning_rate"],
             "n_estimators": model_cfg["n_estimators"],
-            "objective": model_cfg["objective"],
+            "objective": model_cfg["objective"],       # multi:softmax
+            "num_class": model_cfg["num_class"],       # 3
             "subsample": model_cfg["subsample"],
             "colsample_bytree": model_cfg["colsample_bytree"],
+            "min_child_weight": model_cfg["min_child_weight"],
+            "reg_alpha": model_cfg["reg_alpha"],
+            "reg_lambda": model_cfg["reg_lambda"],
         },
     )
 
@@ -163,10 +170,10 @@ def get_pipeline(role_arn: str, bucket: str) -> Pipeline:
             ProcessingOutput(
                 output_name="evaluation",
                 source="/opt/ml/processing/evaluation",
-                destination=f"s3://{bucket}/ml/evaluation/",
+                destination=f"s3://{bucket}/hazard/ml/evaluation/",
             )
         ],
-        code="ml/training/evaluation.py",
+        code="ml/pipeline/evaluate_pipeline.py",
         property_files=[evaluation_report],
     )
 
@@ -190,16 +197,17 @@ def get_pipeline(role_arn: str, bucket: str) -> Pipeline:
         ),
     )
 
+    # Register model only if balanced_accuracy >= accuracy_threshold
     step_condition = ConditionStep(
-        name="CheckRmseThreshold",
+        name="CheckAccuracyThreshold",
         conditions=[
-            ConditionLessThanOrEqualTo(
+            ConditionGreaterThanOrEqualTo(
                 left=JsonGet(
                     step_name=step_eval.name,
                     property_file=evaluation_report,
-                    json_path="metrics.rmse.value",
+                    json_path="metrics.balanced_accuracy.value",
                 ),
-                right=rmse_threshold,
+                right=accuracy_threshold,
             )
         ],
         if_steps=[step_register],
@@ -208,7 +216,7 @@ def get_pipeline(role_arn: str, bucket: str) -> Pipeline:
 
     return Pipeline(
         name=PIPELINE_NAME,
-        parameters=[input_data_uri, rmse_threshold],
+        parameters=[input_data_uri, accuracy_threshold],
         steps=[step_data_prep, step_training, step_eval, step_condition],
         sagemaker_session=session,
     )
@@ -249,7 +257,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--action", choices=["create", "execute", "status"], default="create")
     parser.add_argument("--role-arn", default=None)
-    parser.add_argument("--bucket", default="hazard")
+    parser.add_argument("--bucket", default="aws-hazard-risk-vigamogh-dev")
     args = parser.parse_args()
 
     if args.action == "status":

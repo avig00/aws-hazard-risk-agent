@@ -13,7 +13,8 @@ import os
 import re
 from pathlib import Path
 
-import awswrangler as wr
+import time
+
 import boto3
 import yaml
 
@@ -143,21 +144,46 @@ def run_query(
     safe_sql = _enforce_guardrails(compiled_sql)
     logger.info("Compiled SQL:\n%s", safe_sql)
 
-    # 4. Execute via Athena
+    # 4. Execute via Athena (raw boto3 — no awswrangler dependency)
     output_location = (
         s3_output
         or os.environ.get("ATHENA_OUTPUT_LOCATION", "s3://aws-hazard-risk-vigamogh-dev/athena-results/")
     )
 
-    df = wr.athena.read_sql_query(
-        sql=safe_sql,
-        database=ALLOWED_DATABASE,
-        s3_output=output_location,
-        ctas_approach=False,
-        boto3_session=boto3.Session(region_name=region),
+    athena = boto3.client("athena", region_name=region)
+    start_resp = athena.start_query_execution(
+        QueryString=safe_sql,
+        QueryExecutionContext={"Database": ALLOWED_DATABASE},
+        ResultConfiguration={"OutputLocation": output_location},
     )
+    execution_id = start_resp["QueryExecutionId"]
 
-    results = df.to_dict(orient="records")
+    # Poll until terminal state
+    for _ in range(60):
+        status_resp = athena.get_query_execution(QueryExecutionId=execution_id)
+        state = status_resp["QueryExecution"]["Status"]["State"]
+        if state in ("SUCCEEDED", "FAILED", "CANCELLED"):
+            break
+        time.sleep(2)
+
+    if state != "SUCCEEDED":
+        reason = status_resp["QueryExecution"]["Status"].get("StateChangeReason", "unknown")
+        raise RuntimeError(f"Athena query {state}: {reason}")
+
+    # Paginate results
+    paginator = athena.get_paginator("get_query_results")
+    rows_all = []
+    col_names = None
+    for page in paginator.paginate(QueryExecutionId=execution_id):
+        page_rows = page["ResultSet"]["Rows"]
+        if col_names is None:
+            col_names = [c["VarCharValue"] for c in page_rows[0]["Data"]]
+            page_rows = page_rows[1:]  # skip header row
+        for row in page_rows:
+            values = [c.get("VarCharValue", "") for c in row["Data"]]
+            rows_all.append(dict(zip(col_names, values)))
+
+    results = rows_all
     logger.info("Query returned %d rows", len(results))
 
     return {

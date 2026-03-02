@@ -1,0 +1,125 @@
+FEMA Flood Risk Assessment — Coastal County Vulnerability Report
+
+INTRODUCTION
+
+Coastal counties in the United States face disproportionately high flood risk from two primary
+sources: riverine flooding from inland precipitation and coastal flooding from storm surge,
+tidal inundation, and sea-level rise. This document summarizes FEMA's assessment of flood
+vulnerability for major coastal counties, drawing on National Flood Insurance Program (NFIP)
+data and the National Risk Index.
+
+HARRIS COUNTY, TEXAS
+
+Harris County (FIPS: 48201) consistently ranks among the highest-risk flood counties in the
+United States. The county encompasses Houston, the fourth-largest U.S. city, built largely on
+low-lying bayou systems with limited natural drainage.
+
+Key statistics:
+- NRI Flood Expected Annual Loss: $1.4 billion (buildings + agriculture + population)
+- NFIP policies in force: approximately 500,000 (largest single county in the U.S.)
+- Major flood events: Hurricane Harvey (2017) caused $125 billion in total losses,
+  flooding over 154,000 structures
+- Repetitive loss properties: Harris County has more than 8,000 NFIP repetitive loss
+  properties — structures that have filed two or more NFIP claims exceeding 25% of
+  the property value in a 10-year period
+
+Flood vulnerability factors for Harris County:
+1. Low elevation: Much of the county is within 10–30 feet of sea level
+2. Impervious surface cover: Over 60% impervious surfaces reduce infiltration
+3. Bayou hydrology: Addicks, Barker, and Brays Bayou all funnel runoff to central Houston
+4. Hurricane exposure: Direct Gulf of Mexico access via Galveston Bay
+5. Population density: 4.7 million residents, many in flood-prone areas
+
+MIAMI-DADE COUNTY, FLORIDA
+
+Miami-Dade County (FIPS: 12086) faces simultaneous risks from Atlantic hurricanes, coastal
+storm surge, and nuisance flooding from sea-level rise. Its flat limestone geology makes
+traditional flood barriers ineffective.
+
+Key statistics:
+- NRI Hurricane Expected Annual Loss: $4.2 billion
+- NRI Coastal Flooding Expected Annual Loss: $890 million
+- Elevation: Average elevation under 10 feet above sea level
+- Hurricane landfalls since 1900: 11 major hurricanes (Category 3+) within 50 miles
+
+Why Miami-Dade is uniquely vulnerable:
+1. Porous limestone aquifer: Seawater intrudes through the limestone bedrock, making
+   traditional flood control structures less effective — water rises from below
+2. Sea-level rise: Miami has experienced roughly 4 inches of sea-level rise since 1993,
+   with king tides increasingly flooding downtown streets during clear weather
+3. Dense coastal development: $3.2 trillion in coastal property at risk (Lincoln Institute)
+4. Hurricane track probability: Miami sits in the highest hurricane probability zone in
+   the continental United States (Atlantic basin)
+
+Notable flood events:
+- Hurricane Irma (2017): $50 billion Florida-wide, major surge flooding in Miami Beach
+- 2021 Surfside collapse attributed partially to groundwater corrosion
+
+ORLEANS PARISH, LOUISIANA
+
+Orleans Parish (FIPS: 22071) — New Orleans — presents the most extreme case of urban flood
+vulnerability in the United States. Much of the city sits 6–8 feet below sea level, entirely
+dependent on a system of levees, pumps, and floodwalls.
+
+Key statistics:
+- NRI Flood Risk Percentile: 99th (highest nationally)
+- NRI Hurricane Expected Annual Loss: $2.8 billion
+- Below sea-level area: approximately 50% of the city
+- Pump capacity: 24 drainage pumping stations can remove 1 inch of rain per hour
+  (insufficient for major tropical events)
+
+Historical losses:
+- Hurricane Katrina (2005): $165 billion total loss, 1,800 deaths, 80% of city flooded
+  for weeks after levee failures; largest single natural disaster in U.S. history
+- Hurricane Ida (2021): $75 billion Louisiana-wide, levees held but extended power outages
+  caused significant indirect losses
+
+Systemic vulnerability factors:
+1. Subsidence: The city sinks 1–2 inches per year due to groundwater withdrawal and
+   natural compaction, increasing flood exposure over time
+2. Levee system reliability: Post-Katrina rebuilt $14.5B system; however, Katrina-level
+   events remain within the design envelope
+3. Environmental buffer loss: Louisiana loses approximately 25–35 square miles of coastal
+   wetland annually, removing natural storm surge attenuation
+
+COASTAL VULNERABILITY PATTERNS
+
+Analysis of NFIP data and NRI scores across 387 coastal counties reveals consistent
+vulnerability factors:
+
+1. Elevation under 10 feet: Counties with median elevations below 10 feet have 7× higher
+   EAL per capita than counties above 50 feet
+
+2. Unconfined coastal aquifers: Permeable geology accelerates saltwater intrusion and
+   reduces the effectiveness of traditional flood barriers
+
+3. Hurricane climatology: Counties in the Gulf of Mexico and Atlantic coast from Texas
+   to Maine face systematically higher hurricane EAL than Pacific coast counties
+
+4. Land use intensity: Higher impervious surface fraction correlates strongly (r=0.73)
+   with flood damage ratios in urban counties
+
+5. NFIP participation: Counties with high NFIP take-up rates tend to have better pre-
+   disaster mitigation funding, reducing loss ratios over time
+
+FEMA FLOOD ZONE DESIGNATIONS
+
+FEMA's Flood Insurance Rate Maps (FIRMs) classify areas by flood probability:
+- Zone A / AE: 1% annual chance flood (100-year floodplain) — mandatory NFIP purchase
+  for federally backed mortgages
+- Zone AO / AH: Sheet flow flooding or ponding with 1% annual chance
+- Zone V / VE: Coastal high velocity zones with wave action hazard
+- Zone X (shaded): 0.2% annual chance flood (500-year floodplain)
+- Zone X (unshaded): Minimal flood hazard
+
+Approximately 8.7 million housing units nationwide are in the 100-year floodplain (Zone A/AE/V).
+FEMA estimates that only about 50% of homes in mandatory purchase zones actually hold active
+NFIP policies, creating a significant protection gap.
+
+RECOMMENDATIONS FOR HIGH-RISK COUNTIES
+
+1. Mandatory elevation certificates for all new construction in Zones A/V
+2. Community Rating System (CRS) participation to reduce NFIP premiums through mitigation
+3. Acquisition programs for repetitive loss properties in the most flood-prone areas
+4. Coastal wetland and mangrove restoration to rebuild natural storm surge buffers
+5. Updated flood maps incorporating LiDAR elevation data and projected sea-level rise

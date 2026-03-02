@@ -58,68 +58,12 @@ resource "aws_cloudwatch_dashboard" "hazard_risk" {
   })
 }
 
-# ── SageMaker Model Monitor schedule ─────────────────────────────────────────
-# Only deployed after the endpoint is live and baseline stats are in S3 (Phase 3).
-resource "aws_sagemaker_data_quality_job_definition" "hazard_monitor" {
-  count    = local.deploy_endpoint ? 1 : 0
-  name     = "hazard-data-quality-monitor"
-  role_arn = aws_iam_role.sagemaker_execution.arn
-
-  data_quality_app_specification {
-    image_uri = "156813124566.dkr.ecr.${var.region}.amazonaws.com/sagemaker-model-monitor-analyzer"
-  }
-
-  data_quality_baseline_config {
-    statistics_resource {
-      s3_uri = "s3://aws-hazard-risk-vigamogh-dev/hazard/ml/monitoring/baseline_stats.json"
-    }
-    constraints_resource {
-      s3_uri = "s3://aws-hazard-risk-vigamogh-dev/hazard/ml/monitoring/baseline_constraints.json"
-    }
-  }
-
-  data_quality_job_input {
-    endpoint_input {
-      endpoint_name              = "hazard-risk-model"
-      local_path                 = "/opt/ml/processing/input/endpoint"
-      s3_input_mode              = "File"
-      s3_data_distribution_type  = "FullyReplicated"
-    }
-  }
-
-  data_quality_job_output_config {
-    monitoring_outputs {
-      s3_output {
-        local_path     = "/opt/ml/processing/output"
-        s3_uri         = "s3://aws-hazard-risk-vigamogh-dev/hazard/ml/monitoring/reports/"
-        s3_upload_mode = "EndOfJob"
-      }
-    }
-  }
-
-  job_resources {
-    cluster_config {
-      instance_count    = 1
-      instance_type     = "ml.m5.large"
-      volume_size_in_gb = 20
-    }
-  }
-}
-
-resource "aws_sagemaker_monitoring_schedule" "hazard_daily" {
-  count = local.deploy_endpoint ? 1 : 0
-  name  = "hazard-daily-data-quality"
-
-  monitoring_schedule_config {
-    monitoring_job_definition_name = aws_sagemaker_data_quality_job_definition.hazard_monitor[0].name
-    monitoring_type                = "DataQuality"
-    schedule_config {
-      schedule_expression = "cron(0 6 * * ? *)"  # Daily at 6 AM UTC
-    }
-  }
-
-  tags = local.common_tags
-}
+# ── SageMaker Model Monitor ───────────────────────────────────────────────────
+# NOTE: SageMaker Serverless Inference endpoints do not support DataCapture,
+# which is required for the built-in Model Monitor data quality jobs.
+# Drift detection is handled instead via ml/monitoring/drift_detector.py
+# (scheduled by EventBridge → Lambda) which computes feature statistics
+# from Athena predictions and stores them in S3.
 
 # ── EventBridge retraining trigger ───────────────────────────────────────────
 resource "aws_cloudwatch_event_rule" "monthly_retrain" {

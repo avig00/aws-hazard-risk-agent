@@ -17,7 +17,7 @@ import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from ml.inference.inference_service import predict_from_endpoint
+from ml.inference.inference_service import predict_risk
 from rag.prompts.ask_template import SYSTEM_PROMPT, build_ask_prompt, build_citations
 from rag.retrieval.retrieve import retrieve_similar
 
@@ -99,17 +99,17 @@ def health():
 @app.post("/predict")
 def predict(request: PredictRequest):
     """
-    Call the SageMaker endpoint and return a county risk score + bucket.
+    Call the SageMaker endpoint and return a county risk tier (LOW/MEDIUM/HIGH).
     """
     try:
-        result = predict_from_endpoint(
-            payload=request.features,
+        result = predict_risk(
+            features=request.features,
             endpoint_name=ENDPOINT_NAME,
         )
         return {
             "county_id": request.county_id,
-            "prediction": result["predictions"][0] if result["predictions"] else None,
-            "risk_bucket": result["risk_buckets"][0] if result["risk_buckets"] else None,
+            "risk_tier": result["risk_tier"],
+            "class_id": result["class_id"],
             "endpoint": result["endpoint_name"],
         }
     except Exception as exc:

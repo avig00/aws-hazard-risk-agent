@@ -1,0 +1,133 @@
+NOAA National Severe Storms Laboratory — Tornado Risk in the Central United States
+
+TORNADO ALLEY: DEFINITION AND GEOGRAPHY
+
+"Tornado Alley" is a colloquial term for the region of the central United States that
+experiences the highest frequency and intensity of tornadoes. The core of Tornado Alley
+encompasses parts of Texas, Oklahoma, Kansas, Nebraska, and South Dakota, though high
+tornado frequency extends into Missouri, Iowa, Illinois, and Indiana — sometimes called
+the "Expanded Tornado Alley" or "Dixie Alley" in the Southeast.
+
+The geographic concentration of tornadoes in this region results from unique atmospheric
+conditions: warm, moist air from the Gulf of Mexico collides with cool, dry air from the
+Rocky Mountains and cold Arctic air masses from Canada. This collision produces the severe
+thunderstorm environments that spawn tornadoes more frequently than anywhere else on Earth.
+
+TORNADO CLIMATOLOGY
+
+Annual tornado statistics (NOAA Storm Prediction Center, 2000–2023 average):
+- Average U.S. tornadoes per year: 1,200–1,400
+- Average U.S. tornado deaths per year: 70–80
+- Average annual property damage: $5–8 billion
+
+Peak tornado season:
+- Southern Plains (TX, OK): March–May
+- Northern Plains and Midwest: May–June
+- Southeast (Dixie Alley): November–March (second peak)
+
+Tornado intensity (Enhanced Fujita Scale):
+- EF0–EF1: Weak (winds 65–110 mph) — ~80% of all tornadoes
+- EF2–EF3: Strong (winds 111–165 mph) — ~18% of all tornadoes
+- EF4–EF5: Violent (winds 166+ mph) — ~2% of all tornadoes, but responsible for
+  ~70% of all tornado fatalities
+
+HIGH-RISK COUNTIES — TORNADO EAL ANALYSIS
+
+Moore, Oklahoma (Cleveland County, FIPS: 40027):
+Moore is arguably the single most tornado-vulnerable incorporated area in the United States.
+It lies directly in a favored tornado track that has produced multiple violent tornadoes.
+
+Historical events:
+- May 3, 1999: F5 tornado (Bridge Creek–Moore), winds exceeding 300 mph (highest ever
+  measured), 36 deaths, $1 billion damage, 8,000 structures destroyed
+- May 20, 2013: EF5 tornado, 24 deaths including 7 children at Plaza Towers Elementary,
+  $2 billion damage, 1,200 homes destroyed, 2-mile-wide damage path
+- May 31, 2013: EF5 tornado, El Reno–suburban Moore corridor, largest tornado width ever
+  recorded at 2.6 miles; 8 deaths including veteran storm chasers
+
+NRI Tornado EAL for Cleveland County, OK: $48 million/year
+Tornado events 2000–2023: 47 significant events (EF1+)
+
+Joplin, Missouri (Jasper County, FIPS: 29097):
+- May 22, 2011: EF5 tornado struck directly across the city, 161 deaths (deadliest single
+  U.S. tornado since 1947), $2.8 billion damage, 7,500 structures destroyed in a 6-mile
+  damage path 0.75 miles wide at its peak
+
+NRI Tornado EAL for Jasper County, MO: $32 million/year
+
+Oklahoma County, Oklahoma (FIPS: 40109):
+Home to Oklahoma City, one of the largest urban areas in Tornado Alley.
+- NRI Tornado EAL: $175 million/year (highest absolute dollar value in Oklahoma)
+- EF2+ tornadoes within county 2000–2023: 23 events
+
+WHY CENTRAL PLAINS COUNTIES ARE MORE VULNERABLE
+
+1. Atmospheric dynamics: The dryline — a boundary between Gulf moisture and continental
+   dryness — sets up along the western edge of the Plains daily in spring, serving as a
+   focal point for supercell thunderstorm development
+
+2. Limited natural barriers: The flat terrain of the central Plains allows supercell
+   thunderstorms to travel hundreds of miles without terrain disruption, enabling tornadoes
+   to maintain intensity over populated areas
+
+3. Building stock: A high proportion of mobile homes and manufactured housing in rural
+   Plains counties provides minimal tornado protection. Mobile homes have a 10× higher
+   fatality rate per tornado event than site-built homes
+
+4. Warning time limitations: Despite improvements in Doppler radar (NEXRAD network), the
+   average lead time for a tornado warning is 13 minutes — insufficient for evacuation
+   of large areas
+
+5. Population density vs. tornado frequency interaction: While rural counties have lower
+   absolute EAL, they have higher EAL per capita relative to their total exposure
+
+TORNADO RISK TRENDS 2000–2023
+
+Tornado frequency by decade (NOAA SPC):
+- 2000–2009: Average 1,285 tornadoes/year
+- 2010–2019: Average 1,141 tornadoes/year (apparent decrease partly due to improved
+  verification methods reducing marginal EF0 counts)
+- 2020–2023: Average 1,312 tornadoes/year
+
+Notable outbreaks 2010–2023:
+- April 25–28, 2011 Super Outbreak: 362 tornadoes in 3 days, 324 deaths, $11 billion
+  damage — largest outbreak ever recorded; Alabama, Mississippi, Tennessee most affected
+- May 2011: 177 fatalities in one month — deadliest month since 1953
+- April 27, 2014 outbreak: 35 tornadoes in Arkansas, Kansas, Nebraska, 17 deaths
+
+Dixie Alley emergence: Research shows the highest per-capita tornado fatality rates in
+the 21st century have shifted to the Southeast. Contributing factors include:
+- Higher forest cover reduces radar beam penetration and limits visibility
+- Higher population density in tornado paths
+- Weaker building codes than Midwest states
+- Higher mobile home density in rural Southeast counties
+- Nocturnal tornado peak (tornados harder to see and respond to at night)
+
+NOAA STORM DATA: TOP 10 TORNADO COUNTIES BY TOTAL EVENTS (2000–2023)
+
+1. Ellis County, TX (FIPS: 48139): 127 events
+2. Oklahoma County, OK (FIPS: 40109): 118 events
+3. Bell County, TX (FIPS: 48027): 114 events
+4. Pottawatomie County, OK (FIPS: 40125): 108 events
+5. Tarrant County, TX (FIPS: 48439): 103 events
+6. Logan County, OK (FIPS: 40083): 99 events
+7. Sedgwick County, KS (FIPS: 20173): 97 events
+8. Dallas County, TX (FIPS: 48113): 95 events
+9. Colfax County, NE (FIPS: 31037): 91 events
+10. Barton County, KS (FIPS: 20009): 88 events
+
+SHELTER AND PREPAREDNESS RECOMMENDATIONS
+
+NOAA and FEMA recommend the following for tornado-prone counties:
+
+1. Community safe rooms: FEMA-rated above-ground or underground shelters rated for
+   EF5 winds (250 mph); FEMA provides Hazard Mitigation Grant Program funding
+
+2. Mobile home replacement: Mobile/manufactured homes should never be used as tornado
+   shelters; residents should identify permanent shelter locations before severe weather
+
+3. Wireless Emergency Alerts (WEA): Ensure cell phones are tornado warning-enabled;
+   outdoor warning sirens supplement but do not replace WEA
+
+4. Storm spotter networks: NOAA's SKYWARN program trains volunteer storm spotters who
+   provide ground truth to local NWS offices, improving warning accuracy
