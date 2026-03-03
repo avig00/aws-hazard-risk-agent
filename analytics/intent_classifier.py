@@ -9,9 +9,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 
-CURRENT_YEAR = datetime.now().year
-DEFAULT_START_YEAR = CURRENT_YEAR - 8
-DEFAULT_END_YEAR = CURRENT_YEAR - 1
+# Hardcoded to match the actual Gold-layer data range (risk_feature_mart + hazard_event_summary).
+# Do NOT compute from datetime.now() — the data pipeline runs annually and the latest
+# complete year is 2023.  Updating this constant is the only change needed when new data arrives.
+DEFAULT_START_YEAR = 2010
+DEFAULT_END_YEAR = 2023
 
 
 @dataclass
@@ -175,5 +177,10 @@ def classify_intent(question: str, default_limit: int = 10) -> QueryIntent:
             "period_b_start": mid + 1,
             "period_b_end": params["end_year"],
         })
+
+    # Route hazard-specific increase queries to hazard_event_summary (per-hazard table)
+    # rather than risk_feature_mart (all-hazard aggregate).
+    if matched_template == "largest_increase" and params.get("hazard_type", "all") != "all":
+        matched_template = "hazard_event_increase"
 
     return QueryIntent(template=matched_template, params=params, confidence=0.9)

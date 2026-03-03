@@ -238,11 +238,11 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
             db_hazard = _HAZARD_SYNONYMS[phrase]
             break
 
-    # Pattern 1: user named a specific hazard, but ALL SQL templates query risk_feature_mart
-    # which stores aggregate NRI/FEMA metrics across ALL hazard types combined.
-    # There is no WHERE hazard_type filter in any template — results always represent
-    # all-hazard composites regardless of what hazard was mentioned.
-    if db_hazard:
+    # Pattern 1: user named a specific hazard, but risk_feature_mart stores aggregate NRI/FEMA
+    # metrics across ALL hazard types.  Skip this note when the intent routed to
+    # hazard_event_increase, which queries hazard_event_summary with a hazard_type filter
+    # and therefore DOES return hazard-specific results.
+    if db_hazard and intent_template != "hazard_event_increase":
         return (
             f"DATA LIMITATION — must tell the user: "
             f"The user asked about '{user_term}' (Gold-layer canonical term: "

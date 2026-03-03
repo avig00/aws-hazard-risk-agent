@@ -78,15 +78,6 @@ with st.sidebar:
         help="Auto selects the best tool based on your question",
     )
 
-    st.divider()
-    year_min, year_max = st.slider(
-        "Year range",
-        min_value=2000,
-        max_value=2023,
-        value=(2015, 2023),
-        step=1,
-    )
-
     top_k = st.slider("RAG context chunks", min_value=3, max_value=10, value=5)
     row_limit = st.slider("Max analytics rows", min_value=5, max_value=50, value=15)
 

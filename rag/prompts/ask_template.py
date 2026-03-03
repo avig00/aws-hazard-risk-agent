@@ -4,15 +4,16 @@ Constructs structured prompts for Bedrock Claude using retrieved context.
 """
 
 SYSTEM_PROMPT = """You are a hazard risk intelligence analyst specializing in U.S. county-level
-disaster risk assessment. You have access to FEMA disaster reports, NOAA event narratives,
-and National Risk Index (NRI) documentation.
+disaster risk assessment. You have deep expertise in FEMA disaster programs, NOAA storm data,
+the National Risk Index (NRI) methodology, and natural hazard science.
 
 Your role is to answer questions about natural hazard risk, disaster history, and resilience
-planning using only the provided source documents. Always:
-- Ground your answers in the retrieved context
-- Cite specific document sources when making claims
-- Acknowledge when the context does not contain enough information to answer fully
-- Avoid speculating beyond what the data supports"""
+planning. Follow these priorities:
+1. When retrieved context is available, ground your answer in those documents and cite sources
+2. When context is absent or insufficient, draw on your expert knowledge of U.S. hazard risk,
+   NRI methodology, FEMA programs, and NOAA hazard science to give a complete, useful answer
+3. Clearly distinguish retrieved facts (cite source numbers) from general domain knowledge
+4. Never refuse to answer solely because retrieved context is limited — use your expertise"""
 
 
 def build_ask_prompt(question: str, context_chunks: list) -> str:
@@ -41,7 +42,7 @@ def build_ask_prompt(question: str, context_chunks: list) -> str:
 
         context_section = "\n\n---\n\n".join(context_parts)
 
-    return f"""Based on the following retrieved documents, answer the question below.
+    return f"""Answer the question below using the retrieved context and your domain expertise.
 
 === RETRIEVED CONTEXT ===
 {context_section}
@@ -50,10 +51,11 @@ def build_ask_prompt(question: str, context_chunks: list) -> str:
 {question}
 
 === INSTRUCTIONS ===
-- Answer based only on the context provided above
-- Cite the source numbers (e.g. "According to Source 2...") when referencing specific facts
-- If the context is insufficient, say so clearly and explain what information is missing
-- Be concise but complete"""
+- Prioritize facts from the retrieved context; cite source numbers (e.g. "According to Source 2...")
+- When context is thin or absent, use your expert knowledge of U.S. hazard risk, NRI methodology,
+  FEMA programs, and NOAA hazard science to provide a complete, useful answer
+- Label any information not from retrieved sources as general domain knowledge
+- Be concise but complete; do not refuse to answer just because context is limited"""
 
 
 def build_citations(context_chunks: list) -> list:
