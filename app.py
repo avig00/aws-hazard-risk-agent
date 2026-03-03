@@ -21,8 +21,10 @@ from ui.components import (
     render_analytics_table,
     render_citations,
     render_error,
+    render_no_data,
     render_prediction_card,
     render_sql_expander,
+    render_tool_badges,
     render_trend_chart,
 )
 
@@ -68,7 +70,13 @@ def bedrock_call(system: str, user_message: str) -> str:
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("🌪️ Hazard Risk Agent")
+    st.markdown(
+        '<div style="padding:4px 0 12px">'
+        '<span style="font-size:1.5rem">🌪️</span>'
+        '<span style="font-size:1.1rem;font-weight:700;color:#E6EDF3;margin-left:8px">'
+        'Hazard Risk Agent</span></div>',
+        unsafe_allow_html=True,
+    )
     st.caption("County-level disaster risk intelligence powered by ML + RAG")
     st.divider()
 
@@ -78,33 +86,92 @@ with st.sidebar:
         help="Auto selects the best tool based on your question",
     )
 
-    top_k = st.slider("RAG context chunks", min_value=3, max_value=10, value=5)
-    row_limit = st.slider("Max analytics rows", min_value=5, max_value=50, value=15)
+    with st.expander("⚙️ Advanced settings"):
+        top_k = st.slider("RAG context chunks", min_value=3, max_value=10, value=5,
+                          help="Number of document chunks retrieved for /ask questions")
+        row_limit = st.slider("Max analytics rows", min_value=5, max_value=50, value=15,
+                              help="Maximum rows returned from Athena queries")
 
     st.divider()
-    if st.button("🗑️ Clear conversation"):
+    if st.button("🗑️ Clear conversation", use_container_width=True):
         clear_history()
         st.rerun()
 
     st.divider()
     st.markdown(
-        "**Example questions:**\n"
-        "- Which counties saw the largest increase in flood events 2015–2023?\n"
-        "- Show top 10 counties by predicted risk and property damage\n"
-        "- Compare Harris County vs Miami-Dade hazard distributions\n"
-        "- Why are coastal counties more vulnerable to hurricanes?\n"
-        "- What is the NRI expected loss methodology?"
+        '<p style="color:#4B5563;font-size:0.75rem;text-transform:uppercase;'
+        'letter-spacing:0.08em;margin-bottom:8px">Example questions</p>',
+        unsafe_allow_html=True,
     )
+    _EXAMPLES = [
+        "Which counties saw the largest increase in flood events 2015–2023?",
+        "Show top 10 counties by predicted risk and property damage",
+        "Compare Harris County vs Miami-Dade hazard distributions",
+        "Why are coastal counties more vulnerable to hurricanes?",
+        "What is the NRI expected loss methodology?",
+    ]
+    for ex in _EXAMPLES:
+        st.markdown(
+            f'<p style="color:#6B7280;font-size:0.8rem;padding:3px 0;'
+            f'border-left:2px solid #1E2535;padding-left:8px;margin:4px 0">'
+            f'{ex}</p>',
+            unsafe_allow_html=True,
+        )
 
 
 # ── Main area ─────────────────────────────────────────────────────────────────
-st.title("Hazard Risk Intelligence Agent")
-st.caption(
-    "Ask questions about county-level disaster risk. "
-    "The agent combines predictive ML, structured analytics, and document retrieval."
+st.markdown(
+    '<h1 style="font-size:1.8rem;font-weight:700;margin-bottom:2px">Hazard Risk Intelligence Agent</h1>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<p style="color:#6B7280;font-size:0.9rem;margin-top:0">Ask questions about county-level disaster risk. '
+    'The agent combines predictive ML, structured analytics, and document retrieval.</p>',
+    unsafe_allow_html=True,
 )
 
 init_session()
+
+# Welcome state — shown only before the first message
+if not st.session_state.get("messages"):
+    st.markdown("<br>", unsafe_allow_html=True)
+    col_l, col_c, col_r = st.columns([1, 2, 1])
+    with col_c:
+        st.markdown(
+            """
+            <div style="text-align:center;padding:2rem 1rem">
+              <div style="font-size:3rem;margin-bottom:0.5rem">🌍</div>
+              <h3 style="color:#E6EDF3;margin:0 0 0.4rem">Ready to analyze hazard risk</h3>
+              <p style="color:#6B7280;font-size:0.9rem;margin:0">
+                Ask a question in the box below, or use an example from the sidebar.
+              </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Three quick-start cards
+    c1, c2, c3 = st.columns(3)
+    _QUICKSTART = [
+        ("🔎", "Analytics", "Which counties saw the largest increase in flood events 2015–2023?"),
+        ("🤖", "ML Prediction", "Show top 10 counties by predicted risk and property damage"),
+        ("📚", "Document Q&A", "Why are coastal counties more vulnerable to hurricanes?"),
+    ]
+    for col, (icon, label, question) in zip([c1, c2, c3], _QUICKSTART):
+        with col:
+            st.markdown(
+                f'<div style="background:#161B27;border:1px solid #1E2535;border-radius:8px;'
+                f'padding:14px 16px;min-height:100px">'
+                f'<div style="font-size:1.2rem">{icon}</div>'
+                f'<div style="color:#4F9CF9;font-size:0.72rem;font-weight:600;'
+                f'text-transform:uppercase;letter-spacing:0.06em;margin:4px 0">{label}</div>'
+                f'<div style="color:#9CA3AF;font-size:0.82rem">{question}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+    st.markdown("<br>", unsafe_allow_html=True)
+
 render_history()
 
 # ── Chat input ────────────────────────────────────────────────────────────────
@@ -115,7 +182,7 @@ if prompt := st.chat_input("Ask a hazard risk question…"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Thinking…"):
+        with st.spinner("Analyzing…"):
             try:
                 result = run_agent(
                     question=prompt,
@@ -133,40 +200,42 @@ if prompt := st.chat_input("Ask a hazard risk question…"):
         sources = result.get("sources", [])
         tool_outputs = result.get("tool_outputs", {})
 
-        # ── Render answer text ─────────────────────────────────────────────
-        if answer:
+        # Detect "no data found" answers — render as warning, not prose
+        _NO_DATA_PHRASES = ("no data was found", "no matching records", "no results")
+        if answer and any(p in answer.lower() for p in _NO_DATA_PHRASES):
+            render_no_data(answer)
+        elif answer:
             st.markdown(answer)
 
-        # ── Render structured data from analytics tool ─────────────────────
+        # Analytics table + chart
         if "query" in tools_used and "results" in tool_outputs.get("query", {}):
             query_out = tool_outputs["query"]
             results_data = query_out.get("results", [])
             sql = query_out.get("sql_executed", "")
             intent = query_out.get("intent", "")
 
-            # Choose chart type based on intent
-            if "trend" in intent or "year" in intent.lower():
-                render_trend_chart(results_data)
-            else:
-                render_analytics_table(results_data, title="Analytics Results")
+            if results_data:
+                if "trend" in intent or intent == "hazard_trend_by_year":
+                    render_trend_chart(results_data)
+                else:
+                    render_analytics_table(results_data, title="Analytics Results")
 
             if sql:
                 render_sql_expander(sql)
 
-        # ── Render prediction card ─────────────────────────────────────────
+        # ML prediction card
         pred_out = tool_outputs.get("predict", {})
         if "predict" in tools_used and "risk_tier" in pred_out and not pred_out.get("_no_county"):
             render_prediction_card(pred_out)
 
-        # ── Render citations ───────────────────────────────────────────────
+        # RAG citations
         if sources:
             render_citations(sources)
 
-        # ── Routing info ───────────────────────────────────────────────────
-        routing = result.get("routing", {})
-        st.caption(
-            f"Tools: `{'` + `'.join(tools_used)}`"
-            + (f" | {routing.get('reason', '')}" if routing.get("reason") else "")
+        # Tool badges (routing metadata)
+        render_tool_badges(
+            tools_used,
+            intent=tool_outputs.get("query", {}).get("intent", ""),
         )
 
         # Save to conversation history

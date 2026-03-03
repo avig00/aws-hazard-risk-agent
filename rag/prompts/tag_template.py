@@ -51,8 +51,10 @@ _COLUMN_DESCRIPTIONS = {
     "years_on_record":          "Number of years with data available for this county",
     "avg_events_early":         "Average annual events in the earlier period",
     "avg_events_recent":        "Average annual events in the more recent period",
-    "absolute_increase":        "Absolute change in average events between periods",
-    "pct_increase":             "Percentage change in average events between periods (%)",
+    "events_early_period":      "Total events in the earlier time period (per-hazard count)",
+    "events_recent_period":     "Total events in the more recent time period (per-hazard count)",
+    "absolute_increase":        "Absolute change in events between the two periods",
+    "pct_increase":             "Percentage change in events between the two periods (%)",
     "property_damage":          "Reported property damage ($)",
     "expected_loss":            "NRI Expected Annual Loss ($)",
     "exposure":                 "NRI Exposure score",
@@ -144,8 +146,8 @@ RESULTS ({row_count} rows total):
 {table_text}
 
 ---
-Please provide:
-1. A direct, specific answer to the question referencing actual values from the results
-2. The top 2–3 notable findings or patterns in the data
-3. Any relevant context from your domain knowledge (what drives these scores, known risk factors)
-4. A brief caveat if the data has limitations relevant to this question"""
+Write your response as a senior data analyst presenting to an executive risk team.
+- Open directly with 1–2 sentences citing specific values from the data (county names, dollar figures, percentages, event counts).
+- Follow with 2–3 concise bullet points for the key patterns or comparisons you observe.
+- Close with one sentence of analytical context or caveat only if the data has a meaningful limitation.
+Do NOT use generic section headers like "Answer to the Question:", "Top Findings:", "Context:", or "Caveat:" — write in direct analyst prose with bullets only for the findings list."""

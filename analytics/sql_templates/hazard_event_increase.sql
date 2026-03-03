@@ -6,7 +6,7 @@ WITH period_a AS (
     SELECT
         h.county_fips,
         SUM(h.event_count)                              AS total_events_a
-    FROM gold_hazard.hazard_event_summary h
+    FROM gold_hazard.hazard_event_summary_current h
     WHERE h.year BETWEEN {period_a_start} AND {period_a_end}
       AND h.hazard_type = '{hazard_type}'
     GROUP BY h.county_fips
@@ -15,7 +15,7 @@ period_b AS (
     SELECT
         h.county_fips,
         SUM(h.event_count)                              AS total_events_b
-    FROM gold_hazard.hazard_event_summary h
+    FROM gold_hazard.hazard_event_summary_current h
     WHERE h.year BETWEEN {period_b_start} AND {period_b_end}
       AND h.hazard_type = '{hazard_type}'
     GROUP BY h.county_fips

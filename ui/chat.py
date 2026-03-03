@@ -25,12 +25,13 @@ def add_message(role: str, content: str, metadata: dict = None):
 
 def render_history():
     """Render all past messages in the chat container."""
+    from ui.components import render_tool_badges
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
             meta = msg.get("metadata", {})
             if meta.get("tool_used"):
-                st.caption(f"Tool: `{meta['tool_used']}` | Intent: `{meta.get('intent', '—')}`")
+                render_tool_badges(meta["tool_used"], intent=meta.get("intent", ""))
 
 
 def clear_history():
