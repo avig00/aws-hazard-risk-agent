@@ -143,11 +143,8 @@ def render_analytics_table(results: list, title: str = "Results") -> None:
     if len(display_df) > 50:
         return
 
-    # Color scale: red-yellow-green reversed (high value = high risk = red)
-    use_risk_scale = any(
-        kw in metric_col for kw in ("risk", "loss", "increase", "damage", "fatalities")
-    )
-    color_scale = "RdYlGn_r" if use_risk_scale else "Blues"
+    # Blue gradient: dark navy (low) → sky blue (high) — matches dark theme
+    color_scale = [[0, "#1E2535"], [0.5, "#1D4ED8"], [1.0, "#4F9CF9"]]
 
     y_label = _CHART_LABELS.get(metric_col, metric_col.replace("_", " ").title())
 

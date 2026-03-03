@@ -50,6 +50,26 @@ def _configure_aws():
 _configure_aws()
 
 
+# ── Global CSS overrides ───────────────────────────────────────────────────────
+st.markdown(
+    """
+    <style>
+    /* User avatar: slate blue */
+    [data-testid="chatAvatarIcon-user"] {
+        background-color: #1E3A5F !important;
+        border: 1px solid #2563EB !important;
+    }
+    /* Assistant avatar: deep teal-blue */
+    [data-testid="chatAvatarIcon-assistant"] {
+        background-color: #0C2D48 !important;
+        border: 1px solid #1D4ED8 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # ── Bedrock LLM callable (injected into orchestrator) ─────────────────────────
 @st.cache_resource
 def _get_bedrock_client():
@@ -104,17 +124,17 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
     _EXAMPLES = [
-        "Which counties saw the largest increase in flood events 2015–2023?",
-        "Show top 10 counties by predicted risk and property damage",
-        "Compare Harris County vs Miami-Dade hazard distributions",
-        "Why are coastal counties more vulnerable to hurricanes?",
-        "What is the NRI expected loss methodology?",
+        ("🔎", "Which states had the most FEMA declarations in 2020–2023?"),
+        ("🔎", "Which counties had the highest tornado fatalities?"),
+        ("🤖", "Predict the risk tier for Miami-Dade County, Florida"),
+        ("📈", "Show year-over-year wildfire event trends since 2015"),
+        ("📚", "What is the NRI expected loss methodology?"),
     ]
-    for ex in _EXAMPLES:
+    for icon, ex in _EXAMPLES:
         st.markdown(
-            f'<p style="color:#6B7280;font-size:0.8rem;padding:3px 0;'
-            f'border-left:2px solid #1E2535;padding-left:8px;margin:4px 0">'
-            f'{ex}</p>',
+            f'<p style="color:#9CA3AF;font-size:0.8rem;padding:4px 0;'
+            f'border-left:2px solid #1E3A5F;padding-left:10px;margin:5px 0">'
+            f'<span style="margin-right:6px">{icon}</span>{ex}</p>',
             unsafe_allow_html=True,
         )
 
@@ -238,12 +258,14 @@ if prompt := st.chat_input("Ask a hazard risk question…"):
             intent=tool_outputs.get("query", {}).get("intent", ""),
         )
 
-        # Save to conversation history
+        # Save to conversation history (including rich content for re-render)
         add_message(
             "assistant",
             answer or "See results above.",
             metadata={
                 "tool_used": tools_used,
                 "intent": tool_outputs.get("query", {}).get("intent", ""),
+                "tool_outputs": tool_outputs,
+                "sources": sources,
             },
         )

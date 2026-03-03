@@ -150,4 +150,5 @@ Write your response as a senior data analyst presenting to an executive risk tea
 - Open directly with 1–2 sentences citing specific values from the data (county names, dollar figures, percentages, event counts).
 - Follow with 2–3 concise bullet points for the key patterns or comparisons you observe.
 - Close with one sentence of analytical context or caveat only if the data has a meaningful limitation.
-Do NOT use generic section headers like "Answer to the Question:", "Top Findings:", "Context:", or "Caveat:" — write in direct analyst prose with bullets only for the findings list."""
+Do NOT use generic section headers like "Answer to the Question:", "Top Findings:", "Context:", or "Caveat:" — write in direct analyst prose with bullets only for the findings list.
+Do NOT wrap numbers, dollar amounts, percentages, or county names in backticks or code formatting."""
