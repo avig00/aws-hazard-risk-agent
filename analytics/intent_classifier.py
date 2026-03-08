@@ -39,17 +39,26 @@ _PATTERNS = [
         "regex": r"(compare|comparison|versus|vs\.?)\s+.+(county|counties)",
         "params": {"county_fips_list": "'48201','12086'"},  # Harris TX, Miami-Dade FL defaults
     },
+    # "most FEMA declarations by state" / "states with the most disaster declarations"
+    # NOTE: Must come before top_counties_by_risk — "most" is also in the ranking pattern.
+    {
+        "template": "fema_declarations_by_state",
+        "regex": r"(fema\s+declaration|disaster\s+declaration|federal\s+declaration)",
+        "params": {},
+    },
+    # "top N counties by risk / highest expected loss / worst counties"
+    # NOTE: Must come before hazard_trend_by_year — "annual" in "expected annual loss"
+    # would otherwise match the trend pattern before this ranking pattern.
+    {
+        "template": "top_counties_by_risk",
+        "regex": r"(top|highest|most at risk|worst|greatest risk|ranking)",
+        "params": {},
+    },
     # "hazard trend" / "events by year" / "year-over-year"
     {
         "template": "hazard_trend_by_year",
         "regex": r"(trend|year.over.year|by year|over time|annual)",
         "params": {"hazard_type": "all"},
-    },
-    # "top N counties by risk" (default / catch-all for ranking questions)
-    {
-        "template": "top_counties_by_risk",
-        "regex": r"(top|highest|most at risk|worst|greatest risk|ranking)",
-        "params": {},
     },
 ]
 
@@ -182,5 +191,11 @@ def classify_intent(question: str, default_limit: int = 10) -> QueryIntent:
     # rather than risk_feature_mart (all-hazard aggregate).
     if matched_template == "largest_increase" and params.get("hazard_type", "all") != "all":
         matched_template = "hazard_event_increase"
+
+    # Route hazard-specific trend queries to hazard_event_summary_current.
+    # risk_feature_mart only stores all-hazard aggregates, so a wildfire-specific trend
+    # would return 0 events — route to the per-hazard table instead.
+    if matched_template == "hazard_trend_by_year" and params.get("hazard_type", "all") != "all":
+        matched_template = "hazard_trend_specific"
 
     return QueryIntent(template=matched_template, params=params, confidence=0.9)

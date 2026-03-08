@@ -19,8 +19,8 @@ analytics database. Your role is to interpret the numbers, surface key patterns,
 an authoritative, data-backed answer to the user's question.
 
 Guidelines:
-- Reference specific values from the table (county names, scores, years, percentages)
-- Use your domain knowledge to add context (e.g. why a county ranks highly, what drives NRI scores)
+- ONLY cite county names, state names, figures, percentages, and scores that appear literally in the RESULTS table below. Do not generate additional examples, infer values for unlisted counties, or add specific claims from outside this dataset.
+- Use your domain knowledge solely to explain WHY the data shows what it shows — not to introduce additional data points.
 - Highlight the top findings — do not just re-state the table rows
 - Note any important caveats: data completeness, time period scope, what the metric measures
 - Be concise but analytically rigorous — write like a data analyst presenting to a risk team"""
@@ -32,7 +32,8 @@ _COLUMN_DESCRIPTIONS = {
     "county_name":              "County name",
     "state":                    "U.S. state abbreviation",
     "year":                     "Calendar year",
-    "avg_expected_loss":        "Average NRI Expected Annual Loss ($) — the primary risk metric",
+    "avg_eal_score":            "Average NRI Expected Annual Loss index score (0–100) — higher = greater expected loss relative to other counties; NOT a dollar amount",
+    "avg_expected_loss":        "Average NRI Expected Annual Loss index score (0–100) — NOT a dollar amount",
     "NRI_ExpectedLoss":         "NRI Expected Annual Loss ($) — estimated average annual dollar loss from natural hazards",
     "avg_exposure":             "Average NRI Exposure score (0–1) — built environment and population at risk",
     "NRI_Exposure":             "NRI Exposure score (0–1)",
@@ -49,6 +50,9 @@ _COLUMN_DESCRIPTIONS = {
     "total_claims":             "Total FEMA claims filed across the period",
     "counties_affected":        "Number of distinct counties with recorded events",
     "years_on_record":          "Number of years with data available for this county",
+    "total_declarations":       "Total FEMA disaster declarations summed across all counties in the state",
+    "avg_declarations_per_county": "Average FEMA declarations per county in the state",
+    "total_fema_damage":        "Total FEMA-reported damage across the state ($)",
     "avg_events_early":         "Average annual events in the earlier period",
     "avg_events_recent":        "Average annual events in the more recent period",
     "events_early_period":      "Total events in the earlier time period (per-hazard count)",

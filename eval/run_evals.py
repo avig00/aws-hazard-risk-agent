@@ -153,8 +153,10 @@ def _summarise_tool_output(result: dict[str, Any]) -> str:
     if query_out:
         rows = query_out.get("results", [])
         lines.append(f"query rows returned: {len(rows)}")
-        if rows:
-            lines.append(f"first row sample: {json.dumps(rows[0])}")
+        for i, row in enumerate(rows[:20], 1):
+            lines.append(f"row {i}: {json.dumps(row)}")
+        if len(rows) > 20:
+            lines.append(f"... ({len(rows) - 20} more rows not shown)")
         intent = query_out.get("intent", "")
         if intent:
             lines.append(f"query intent: {intent}")
@@ -237,8 +239,83 @@ def _print_result(case_id: str, question: str, scores: dict, answer: str) -> Non
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _print_summary(all_results: list[dict], cases_by_id: dict) -> None:
+    """Print a comprehensive summary with per-tool and per-dimension breakdowns."""
+    scored = [r for r in all_results if "scores" in r]
+    if not scored:
+        return
+
+    avgs = [r["avg_score"] for r in scored]
+    overall = sum(avgs) / len(avgs)
+    passes = sum(1 for a in avgs if a >= PASS_THRESHOLD)
+    warns  = sum(1 for a in avgs if WARN_THRESHOLD <= a < PASS_THRESHOLD)
+    fails  = sum(1 for a in avgs if a < WARN_THRESHOLD)
+
+    # ── Overall summary ───────────────────────────────────────────────────────
+    print(f"\n{'═' * 72}")
+    print(f"{_BOLD}SUMMARY{_RESET}  overall avg={_colour_score(overall)}  "
+          f"{_GREEN}PASS{_RESET}={passes}  {_YELLOW}WARN{_RESET}={warns}  "
+          f"{_RED}FAIL{_RESET}={fails}  ({len(all_results)} cases)")
+
+    # ── Per-dimension averages ────────────────────────────────────────────────
+    dims = ["faithfulness", "relevance", "groundedness"]
+    dim_avgs = {}
+    for d in dims:
+        vals = [r["scores"][d] for r in scored if isinstance(r["scores"].get(d), (int, float))]
+        dim_avgs[d] = sum(vals) / len(vals) if vals else 0.0
+
+    print(f"\n{_BOLD}Dimension averages:{_RESET}")
+    for d, avg in dim_avgs.items():
+        bar = "█" * int(avg) + "░" * (5 - int(avg))
+        print(f"  {d:<14} {bar}  {_colour_score(avg)}/5")
+
+    # ── Per-tool breakdown ────────────────────────────────────────────────────
+    tool_groups: dict[str, list[dict]] = {}
+    for r in scored:
+        tool = cases_by_id.get(r["id"], {}).get("tool", "unknown")
+        tool_groups.setdefault(tool, []).append(r)
+
+    if len(tool_groups) > 1:
+        print(f"\n{_BOLD}Per-tool breakdown:{_RESET}")
+        print(f"  {'Tool':<10} {'Cases':>5}  {'Avg':>5}  {'Pass':>4}  {'Warn':>4}  {'Fail':>4}")
+        print(f"  {'─'*10} {'─'*5}  {'─'*5}  {'─'*4}  {'─'*4}  {'─'*4}")
+        for tool_name, rows in sorted(tool_groups.items()):
+            t_avgs = [r["avg_score"] for r in rows]
+            t_overall = sum(t_avgs) / len(t_avgs)
+            t_pass = sum(1 for a in t_avgs if a >= PASS_THRESHOLD)
+            t_warn = sum(1 for a in t_avgs if WARN_THRESHOLD <= a < PASS_THRESHOLD)
+            t_fail = sum(1 for a in t_avgs if a < WARN_THRESHOLD)
+            print(f"  {tool_name:<10} {len(rows):>5}  {_colour_score(t_overall):>5}  "
+                  f"{t_pass:>4}  {t_warn:>4}  {t_fail:>4}")
+
+    # ── Results table ─────────────────────────────────────────────────────────
+    print(f"\n{_BOLD}Results table:{_RESET}")
+    print(f"  {'ID':<24} {'Tool':<8} {'Faith':>5}  {'Relev':>5}  {'Grnd':>5}  {'Avg':>5}  Verdict")
+    print(f"  {'─'*24} {'─'*8} {'─'*5}  {'─'*5}  {'─'*5}  {'─'*5}  {'─'*7}")
+    for r in scored:
+        tool = cases_by_id.get(r["id"], {}).get("tool", "?")
+        s = r["scores"]
+        f_s = s.get("faithfulness", 0)
+        r_s = s.get("relevance", 0)
+        g_s = s.get("groundedness", 0)
+        a = r["avg_score"]
+        v = "PASS" if a >= PASS_THRESHOLD else ("WARN" if a >= WARN_THRESHOLD else "FAIL")
+        v_col = (_GREEN if a >= PASS_THRESHOLD else (_YELLOW if a >= WARN_THRESHOLD else _RED))
+        print(f"  {r['id']:<24} {tool:<8} {_colour_score(f_s):>5}  {_colour_score(r_s):>5}  "
+              f"{_colour_score(g_s):>5}  {_colour_score(a):>5}  {v_col}{v}{_RESET}")
+
+    if fails > 0:
+        print(f"\n{_RED}{_BOLD}Failures requiring attention:{_RESET}")
+        for r in scored:
+            if r["avg_score"] < WARN_THRESHOLD:
+                print(f"  • {r['id']}: avg={r['avg_score']:.2f}  Q: {r['question'][:60]}")
+
+    print(f"{'═' * 72}")
+
+
 def run_evals(case_ids: list[str] | None = None) -> list[dict]:
     cases = json.loads(CASES_FILE.read_text())
+    cases_by_id = {c["id"]: c for c in cases}
     if case_ids:
         cases = [c for c in cases if c["id"] in case_ids]
     if not cases:
@@ -249,7 +326,7 @@ def run_evals(case_ids: list[str] | None = None) -> list[dict]:
     all_results = []
 
     print(f"\n{_BOLD}Tier 3 LLM-as-Judge Evaluation — {len(cases)} cases{_RESET}")
-    print(f"Model: us.amazon.nova-lite-v1:0  |  Pass threshold: {PASS_THRESHOLD}")
+    print(f"Model: us.amazon.nova-lite-v1:0  |  Pass ≥{PASS_THRESHOLD}  Warn ≥{WARN_THRESHOLD}")
 
     for case in cases:
         case_id = case["id"]
@@ -282,6 +359,7 @@ def run_evals(case_ids: list[str] | None = None) -> list[dict]:
 
         all_results.append({
             "id": case_id,
+            "tool": case.get("tool", "unknown"),
             "question": question,
             "answer": answer,
             "tool_used": agent_result.get("tool_used", []),
@@ -294,37 +372,26 @@ def run_evals(case_ids: list[str] | None = None) -> list[dict]:
             "elapsed_judge_s": round(elapsed_judge, 2),
         })
 
-    # ── Summary ───────────────────────────────────────────────────────────────
-    scored = [r for r in all_results if "scores" in r]
-    if scored:
-        avgs = [r["avg_score"] for r in scored]
-        overall = sum(avgs) / len(avgs)
-        passes = sum(1 for a in avgs if a >= PASS_THRESHOLD)
-        warns  = sum(1 for a in avgs if WARN_THRESHOLD <= a < PASS_THRESHOLD)
-        fails  = sum(1 for a in avgs if a < WARN_THRESHOLD)
-
-        print(f"\n{'═' * 72}")
-        print(f"{_BOLD}SUMMARY{_RESET}  overall avg={_colour_score(overall)}  "
-              f"{_GREEN}PASS{_RESET}={passes}  {_YELLOW}WARN{_RESET}={warns}  "
-              f"{_RED}FAIL{_RESET}={fails}  ({len(all_results)} cases)")
-        print(f"{'═' * 72}")
-
+    _print_summary(all_results, cases_by_id)
     return all_results
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run LLM-as-judge evals")
-    parser.add_argument("--output", help="Path to save JSON results (e.g. eval/results.json)")
+    parser.add_argument(
+        "--output",
+        default=str(EVAL_DIR / "results.json"),
+        help="Path to save JSON results (default: eval/results.json)",
+    )
     parser.add_argument("--id", nargs="+", dest="ids", help="Run specific case IDs only")
     args = parser.parse_args()
 
     results = run_evals(case_ids=args.ids)
 
-    if args.output:
-        out_path = Path(args.output)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(results, indent=2))
-        print(f"\nResults saved to {out_path}")
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(results, indent=2))
+    print(f"\nResults saved to {out_path}")
 
 
 if __name__ == "__main__":

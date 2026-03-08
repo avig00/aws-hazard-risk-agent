@@ -242,7 +242,7 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
     # metrics across ALL hazard types.  Skip this note when the intent routed to
     # hazard_event_increase, which queries hazard_event_summary with a hazard_type filter
     # and therefore DOES return hazard-specific results.
-    if db_hazard and intent_template != "hazard_event_increase":
+    if db_hazard and intent_template not in ("hazard_event_increase", "fema_declarations_by_state", "hazard_trend_specific"):
         return (
             f"DATA LIMITATION — must tell the user: "
             f"The user asked about '{user_term}' (Gold-layer canonical term: "

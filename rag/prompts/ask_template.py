@@ -30,6 +30,10 @@ def build_ask_prompt(question: str, context_chunks: list) -> str:
     if not context_chunks:
         context_section = "No relevant documents were found in the knowledge base."
     else:
+        # Compute max retrieval score to flag low-confidence retrievals
+        max_score = max((c.get("score", 0.0) for c in context_chunks), default=0.0)
+        low_confidence = max_score < 0.5
+
         context_parts = []
         for i, chunk in enumerate(context_chunks, 1):
             source = chunk.get("metadata", {}).get("source", "Unknown source")
@@ -37,10 +41,16 @@ def build_ask_prompt(question: str, context_chunks: list) -> str:
             header = f"[Source {i}: {source}"
             if hazard and hazard != "general":
                 header += f" | Hazard: {hazard}"
-            header += "]"
+            header += f" | similarity={chunk.get('score', 0.0):.2f}]"
             context_parts.append(f"{header}\n{chunk['text']}")
 
-        context_section = "\n\n---\n\n".join(context_parts)
+        confidence_note = (
+            "\n⚠️  RETRIEVAL CONFIDENCE IS LOW (max similarity score < 0.5). "
+            "The retrieved documents may not be closely relevant. "
+            "Weight domain knowledge carefully and explicitly flag uncertainty in your answer.\n"
+            if low_confidence else ""
+        )
+        context_section = confidence_note + "\n\n---\n\n".join(context_parts)
 
     return f"""Answer the question below using the retrieved context and your domain expertise.
 
@@ -52,9 +62,10 @@ def build_ask_prompt(question: str, context_chunks: list) -> str:
 
 === INSTRUCTIONS ===
 - Prioritize facts from the retrieved context; cite source numbers (e.g. "According to Source 2...")
-- When context is thin or absent, use your expert knowledge of U.S. hazard risk, NRI methodology,
-  FEMA programs, and NOAA hazard science to provide a complete, useful answer
-- Label any information not from retrieved sources as general domain knowledge
+- If retrieval confidence is low (flagged above) or no context was found, begin your answer with:
+  "No high-confidence indexed documents found for this query. The following draws on general domain knowledge:"
+  then provide your best expert answer, clearly labelled as domain knowledge throughout
+- When retrieved context IS available and relevant, do not fall back to domain knowledge — use the sources
 - Be concise but complete; do not refuse to answer just because context is limited"""
 
 

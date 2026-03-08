@@ -1,0 +1,203 @@
+[
+  {
+    "id": "q1_top_risk",
+    "tool": "query",
+    "question": "Which counties have the highest expected annual loss from 2015 to 2023?",
+    "answer": "Los Angeles County in California has the highest expected annual loss from 2015 to 2023 with an average NRI Expected Annual Loss (EAL) score of 100.0, followed closely by Cook County in Illinois with a score of 99.97. \n\n- The top 20 counties with the highest EAL scores are predominantly located in California, with 10 counties in the state, indicating a significant concentration of high disaster risk in this state.\n- The average EAL scores for these top counties range from 99.41 to 100.0, showing a very high expected annual loss relative to other counties.\n- Despite high EAL scores, these counties exhibit varying levels of social vulnerability and resilience, with San Francisco County having the highest resilience score of 99.6501 and Clark County in Nevada having the lowest resilience score of 6.5522.\n\nThis analysis is based on data from 2015 to 2023, and the scores reflect relative risk rather than actual dollar amounts.",
+    "tool_used": [
+      "query"
+    ],
+    "scores": {
+      "faithfulness": 4,
+      "faithfulness_reason": "The answer correctly identifies Los Angeles County as having the highest EAL score but does not mention dollar figures which were not provided in the tool output.",
+      "relevance": 5,
+      "relevance_reason": "The answer directly addresses the question by listing the counties with the highest expected annual loss scores.",
+      "groundedness": 4,
+      "groundedness_reason": "The answer correctly cites county names and EAL scores from the tool output but does not mention dollar figures which were not provided."
+    },
+    "avg_score": 4.33,
+    "elapsed_agent_s": 4.97,
+    "elapsed_judge_s": 1.37
+  },
+  {
+    "id": "q2_flood_increase",
+    "tool": "query",
+    "question": "Which counties saw the largest increase in flood events from 2015 to 2023?",
+    "answer": "The counties with the largest absolute increase in flood events from 2015 to 2023 include Turner County, Georgia, with an increase of 23 events, and Palm Beach County, Florida, with an increase of 32 events. \n\n- Turner County, Georgia, saw the largest percentage increase at 2300%, rising from 1 event to 24 events.\n- Palm Beach County, Florida, had the second-largest absolute increase at 32 events, with a 640% rise from 5 to 37 events.\n- Several California counties also experienced significant increases, with Fresno County seeing a 182.3% increase and Tulare County a 261.8% increase.\n\nThese findings highlight a concerning trend of increasing flood events in certain counties, which may necessitate targeted risk mitigation and preparedness efforts.",
+    "tool_used": [
+      "query"
+    ],
+    "scores": {
+      "faithfulness": 2,
+      "faithfulness_reason": "The answer incorrectly cites Turner County, Georgia, and Palm Beach County, Florida, which are not present in the tool output.",
+      "relevance": 5,
+      "relevance_reason": "The answer directly addresses the question about the largest increase in flood events.",
+      "groundedness": 2,
+      "groundedness_reason": "The specific numbers and counties mentioned in the answer do not match the tool output."
+    },
+    "avg_score": 3.0,
+    "elapsed_agent_s": 4.5,
+    "elapsed_judge_s": 1.02
+  },
+  {
+    "id": "q3_hurricane_synonym",
+    "tool": "query",
+    "question": "Which counties saw the largest increase in hurricane events from 2010 to 2023?",
+    "answer": "No data was found for this query. The Gold-layer dataset may not contain records matching your filters (hazard type, year range, or county). Try broadening your search.",
+    "tool_used": [
+      "query"
+    ],
+    "scores": {
+      "faithfulness": 4,
+      "faithfulness_reason": "The answer correctly reflects that the dataset may not contain records for 'hurricane' and suggests using 'Tropical Storm' instead.",
+      "relevance": 5,
+      "relevance_reason": "The answer directly addresses the question about event increases and provides a clear explanation for the lack of data.",
+      "groundedness": 4,
+      "groundedness_reason": "The answer is grounded in the lack of data but does not contradict the dataset's actual content, only suggests a possible mapping."
+    },
+    "avg_score": 4.33,
+    "elapsed_agent_s": 2.41,
+    "elapsed_judge_s": 1.07
+  },
+  {
+    "id": "q4_county_comparison",
+    "tool": "query",
+    "question": "Compare Harris County TX and Miami-Dade County FL disaster risk from 2015 to 2023",
+    "answer": "Based on the data from 2015 to 2023, Miami-Dade County, Florida, consistently reported an Expected Annual Loss of $99.57 million, while Harris County, Texas, reported $99.91 million. Despite these figures, neither county experienced any NOAA-recorded events, FEMA declarations, or total damages during this period.\n\n- Harris County, Texas, consistently shows a higher Expected Annual Loss ($99.91 million) compared to Miami-Dade County, Florida ($99.57 million).\n- Both counties have identical and unchanging risk scores (99.9364 for Harris and 99.6183 for Miami-Dade) and vulnerability scores (67.9389 for Harris and 75.8588 for Miami-Dade) over the observed years.\n- Harris County has a significantly lower resilience score (17.8753) compared to Miami-Dade County (42.9071), indicating a potentially greater need for resilience-building efforts in Harris County.\n\nIt's important to note that the absence of recorded events, FEMA declarations, and damages in the dataset may limit the interpretation of disaster risk solely based on these metrics.",
+    "tool_used": [
+      "query"
+    ],
+    "scores": {
+      "faithfulness": 4,
+      "faithfulness_reason": "The answer accurately compares the two counties based on the provided data, but there is a minor error in the Expected Annual Loss figures.",
+      "relevance": 5,
+      "relevance_reason": "The answer directly compares the two named counties on relevant metrics as requested.",
+      "groundedness": 4,
+      "groundedness_reason": "The answer cites specific figures from the data, but the Expected Annual Loss figures are slightly incorrect."
+    },
+    "avg_score": 4.33,
+    "elapsed_agent_s": 4.51,
+    "elapsed_judge_s": 1.33
+  },
+  {
+    "id": "q5_predict_harris",
+    "tool": "predict",
+    "question": "Predict the risk tier for Harris County, Texas",
+    "answer": "**ML Risk Prediction**\n\nBased on the XGBoost classifier trained on NOAA storm history, demographics, and NRI risk scores:\n\n**Harris** \u2192 predicted risk tier: **LOW**",
+    "tool_used": [
+      "predict"
+    ],
+    "scores": {
+      "faithfulness": 5,
+      "faithfulness_reason": "The answer accurately states the predicted risk tier returned by the tool.",
+      "relevance": 5,
+      "relevance_reason": "The answer is specific to Harris County and directly addresses the question.",
+      "groundedness": 5,
+      "groundedness_reason": "The risk tier stated in the answer matches the risk_tier field in the tool output."
+    },
+    "avg_score": 5.0,
+    "elapsed_agent_s": 9.22,
+    "elapsed_judge_s": 0.82
+  },
+  {
+    "id": "q6_trend_wildfire",
+    "tool": "query",
+    "question": "Show the year-over-year trend of wildfire events from 2010 to 2023",
+    "answer": "In 2023, only 1 county was affected by wildfires, with a total of 1 event recorded. This starkly contrasts with the years 2010 to 2022, where no wildfire events were recorded at all.\n\n- The data shows a significant increase in wildfire events starting in 2023, with no recorded events from 2010 to 2022.\n- The number of counties affected by wildfires also jumps from zero to one in 2023.\n- Despite the increase in 2023, the total number of wildfire events remains very low, indicating that while the hazard has appeared, it has not yet reached widespread levels.\n\nIt's important to note that the data reflects all-hazard composite risk, not specifically wildfire risk, and the per-hazard event breakdowns are available in a separate event summary table.",
+    "tool_used": [
+      "query"
+    ],
+    "scores": {
+      "faithfulness": 3,
+      "faithfulness_reason": "The answer partially matches the tool output, but it incorrectly states that there were no wildfire events from 2010 to 2022, which is not supported by the provided data.",
+      "relevance": 5,
+      "relevance_reason": "The answer directly addresses the year-over-year trend of wildfire events from 2010 to 2023 as asked.",
+      "groundedness": 3,
+      "groundedness_reason": "The answer includes specific numbers and years that are traceable to the data, but the statement about no events from 2010 to 2022 is not supported by the data."
+    },
+    "avg_score": 3.67,
+    "elapsed_agent_s": 4.1,
+    "elapsed_judge_s": 1.23
+  },
+  {
+    "id": "q7_rag_coastal",
+    "tool": "ask",
+    "question": "Why are coastal counties more vulnerable to hurricanes?",
+    "answer": "No high-confidence indexed documents found for this query. The following draws on general domain knowledge:\n\nCoastal counties are more vulnerable to hurricanes for several reasons:\n\n1. **Geographic Exposure**: Coastal counties are directly exposed to the ocean, making them susceptible to storm surges, high winds, and heavy rainfall associated with hurricanes (Domain Knowledge).\n\n2. **Storm Surge**: Hurricanes can generate significant storm surges, which are abnormal rises in seawater levels caused by the wind and low atmospheric pressure. Coastal areas are particularly vulnerable to these surges, which can lead to extensive flooding and damage (Domain Knowledge).\n\n3. **Wind Damage**: Hurricanes bring high-velocity winds that can cause widespread destruction to buildings, infrastructure, and vegetation in coastal regions (Domain Knowledge).\n\n4. **Population Density**: Many coastal counties have high population densities, which increases the number of people and properties at risk during a hurricane (Domain Knowledge).\n\n5. **Economic Assets**: Coastal areas often have significant economic assets, including tourism infrastructure, commercial properties, and critical facilities, which can be severely impacted by hurricanes (Domain Knowledge).\n\n6. **Elevation and Land Use**: Coastal regions frequently have lower elevations and less natural protection (e.g., mangroves, dunes) compared to inland areas, exacerbating the effects of hurricanes (Domain Knowledge).\n\n7. **Historical Data**: Historical hurricane data shows that coastal counties have experienced more frequent and severe hurricane impacts, indicating a pattern of vulnerability (Domain Knowledge).",
+    "tool_used": [
+      "ask"
+    ],
+    "scores": {
+      "faithfulness": 4,
+      "faithfulness_reason": "The answer uses general domain knowledge appropriately since no high-confidence indexed documents were found.",
+      "relevance": 5,
+      "relevance_reason": "The answer directly addresses why coastal counties are more vulnerable to hurricanes.",
+      "groundedness": 4,
+      "groundedness_reason": "The answer references standard factors like storm surge, wind damage, and elevation, but it does not cite specific data points from the tool output."
+    },
+    "avg_score": 4.33,
+    "elapsed_agent_s": 2.56,
+    "elapsed_judge_s": 1.02
+  },
+  {
+    "id": "q8_rag_nri_methodology",
+    "tool": "ask",
+    "question": "What is the NRI expected loss methodology?",
+    "answer": "No high-confidence indexed documents found for this query. The following draws on general domain knowledge:\n\nThe National Risk Index (NRI) expected loss methodology is designed to provide a comprehensive assessment of the potential financial losses from natural hazards at the county level across the United States. The NRI combines hazard, exposure, and vulnerability data to estimate expected annual losses (EAL) due to various natural hazards, including floods, hurricanes, tornadoes, and wildfires.\n\nThe methodology involves several key steps:\n\n1. **Hazard Assessment**: This step uses historical data from sources like NOAA to evaluate the likelihood and intensity of different natural hazards in each county. For example, flood hazard is assessed using historical flood events and projections based on climate models.\n\n2. **Exposure Assessment**: This step identifies and quantifies the assets (such as buildings, infrastructure, and personal property) that are potentially exposed to these hazards. Data sources may include the U.S. Census Bureau, FEMA\u2019s National Flood Risk Assessment, and other relevant databases.\n\n3. **Vulnerability Assessment**: This step evaluates the susceptibility of exposed assets to damage or destruction when a hazard event occurs. This includes considering factors like building codes, construction quality, and the effectiveness of local disaster preparedness and response plans.\n\n4. **Loss Estimation**: Combining the hazard, exposure, and vulnerability assessments, the NRI calculates the expected annual losses for each hazard type and overall. This is done using sophisticated modeling techniques that account for the probability of events and the potential financial impact.\n\nThe final output of the NRI methodology is a set of expected annual loss figures for each county, which can be used by policymakers, insurers, and communities to better understand their risk profiles and to inform resilience and mitigation planning efforts.\n\n(Domain knowledge: Based on the general principles of risk assessment methodologies and the known structure of the National Risk Index.)",
+    "tool_used": [
+      "ask"
+    ],
+    "scores": {
+      "faithfulness": 4,
+      "faithfulness_reason": "The answer provides a generally accurate description of the NRI methodology, aligning with known principles of risk assessment.",
+      "relevance": 5,
+      "relevance_reason": "The answer directly addresses the expected loss calculation methodology as requested in the question.",
+      "groundedness": 4,
+      "groundedness_reason": "The answer references hazard, exposure, and vulnerability assessments, which are key components of the NRI methodology, but it does not cite specific data sources or numbers."
+    },
+    "avg_score": 4.33,
+    "elapsed_agent_s": 2.38,
+    "elapsed_judge_s": 1.2
+  },
+  {
+    "id": "q9_fema_declarations",
+    "tool": "query",
+    "question": "Which states had the most FEMA declarations from 2020 to 2023?",
+    "answer": "Based on the data, California and Texas counties dominate the list of the highest average NRI Expected Annual Loss (EAL) scores from 2020 to 2023. Los Angeles County in California has the highest average EAL score at 100.0, followed closely by Cook County in Illinois at 99.97.\n\n- California leads with 6 counties in the top 20, all with high average EAL scores above 99.5, indicating a significant disaster risk.\n- Texas follows with 3 counties in the top 20, showing a similarly high risk profile.\n- Florida, Nevada, and Washington each have 1 county in the top 20, suggesting a lower but still notable risk compared to the top states.\n\nThis data highlights the states with the highest disaster risk based on the NRI EAL scores, but it does not directly reflect the number of FEMA declarations.",
+    "tool_used": [
+      "query"
+    ],
+    "scores": {
+      "faithfulness": 2,
+      "faithfulness_reason": "The answer discusses FEMA declarations but does not cite specific counts from the data.",
+      "relevance": 3,
+      "relevance_reason": "The answer partially addresses FEMA declarations but incorrectly focuses on risk scores instead.",
+      "groundedness": 2,
+      "groundedness_reason": "The answer mentions states and counties but does not reference specific FEMA declaration counts from the data."
+    },
+    "avg_score": 2.33,
+    "elapsed_agent_s": 4.2,
+    "elapsed_judge_s": 1.01
+  },
+  {
+    "id": "q10_hybrid",
+    "tool": "hybrid",
+    "question": "Show top 10 counties by predicted risk and property damage",
+    "answer": "Los Angeles County in California tops the list with an average Expected Annual Loss (EAL) score of 100.0, indicating the highest predicted risk among the counties analyzed. Cook County in Illinois follows closely with an average EAL score of 99.97. \n\n- California dominates the list with six counties in the top ten, all showing extremely high EAL scores above 99.75, reflecting their significant predicted risk and potential for property damage.\n- Cook County in Illinois stands out with the highest resilience score of 73.2824, suggesting a relatively better capacity to recover compared to other high-risk counties.\n- Maricopa County in Arizona, despite having the lowest social vulnerability score of 27.0992, still ranks fifth in EAL score, highlighting that lower vulnerability does not necessarily equate to lower risk.\n\nThe data reflects the period from 2010 to 2023, providing a consistent timeframe for comparison across all counties.",
+    "tool_used": [
+      "predict",
+      "query"
+    ],
+    "scores": {
+      "faithfulness": 4,
+      "faithfulness_reason": "The answer accurately reflects the data from the tool output, though it does not explicitly mention the ML prediction results.",
+      "relevance": 5,
+      "relevance_reason": "The answer directly addresses both the predicted risk and potential property damage, as indicated by the EAL scores.",
+      "groundedness": 4,
+      "groundedness_reason": "The answer correctly attributes the EAL scores to the tool output but does not explicitly mention the ML prediction results."
+    },
+    "avg_score": 4.33,
+    "elapsed_agent_s": 4.81,
+    "elapsed_judge_s": 1.15
+  }
+]

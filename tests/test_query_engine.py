@@ -19,7 +19,10 @@ from analytics.query_engine import (
     ("Show the top 10 counties by risk from 2015 to 2023", "top_counties_by_risk"),
     ("Which counties had the highest average expected loss?", "top_counties_by_risk"),
     ("Which counties saw the largest increase in flood events from 2010–2022?", "hazard_event_increase"),
-    ("Show me flood event trends by year 2015–2023", "hazard_trend_by_year"),
+    # flood-specific trend → hazard_trend_specific (per-hazard table, not all-hazard)
+    ("Show me flood event trends by year 2015–2023", "hazard_trend_specific"),
+    # all-hazard trend → hazard_trend_by_year (risk_feature_mart)
+    ("Show the annual trend of all hazard events from 2015 to 2023", "hazard_trend_by_year"),
     ("Compare Harris County vs Miami-Dade over the last 5 years", "county_comparison"),
 ])
 def test_intent_classification(question, expected_template):

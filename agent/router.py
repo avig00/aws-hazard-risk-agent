@@ -19,12 +19,19 @@ class RoutingDecision:
 _PREDICT_SIGNALS = [
     r"predict(ed)?\s+risk", r"risk\s+score", r"model\s+(score|output|predict)",
     r"forecast\s+risk", r"predicted\s+loss", r"ml\s+model",
+    # Verb "predict" followed by any risk/tier mention within 20 chars
+    r"\bpredict\b.{0,20}\b(risk|tier)",
+    r"risk\s+tier",
 ]
 _QUERY_SIGNALS = [
     r"\btop\b", r"\bhighest\b", r"\blowest\b", r"\btrend\b",
     r"\bcompare\b", r"\branking\b", r"\bhow\s+many\b", r"\btotal\b",
     r"\baverage\b", r"\blist\s+(all\s+)?counties\b", r"\blargest\s+increase\b",
     r"\byear.over.year\b", r"\bby\s+year\b",
+    # "which X had the most Y" — always a structured data query
+    r"\bmost\b",
+    # FEMA declarations are always answerable from Gold-layer data
+    r"\bfema\s+declaration",
 ]
 _ASK_SIGNALS = [
     r"\bwhy\b", r"\bwhat\s+is\b", r"\bexplain\b", r"\bdescribe\b",
