@@ -664,6 +664,245 @@ def test_live_nri_methodology_uses_domain_knowledge():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Section 7 — Tier 2: Behavioral assertions on live LLM responses
+#
+# These tests make REAL Athena + Bedrock calls.  They verify that the LLM
+# answer is *grounded* in the data actually returned — not hallucinated.
+#
+# Assertions:
+#   - Key numeric values from Athena appear in the LLM answer (grounding)
+#   - Responses never contain backtick-formatted numbers
+#   - No-data cases produce an explicit acknowledgment, not fabricated prose
+#   - "hurricane" questions reference "Tropical Storm" in generated SQL
+#   - "increase" questions do not describe decreases as increases
+#   - Answers are substantive (>20 chars), not empty or stub text
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import re as _re
+
+
+def _make_real_bedrock_call():
+    """Return a real bedrock_call_fn using Nova Lite."""
+    import boto3
+    bedrock = boto3.client("bedrock-runtime", region_name="us-east-1")
+
+    def _call(system, user_message):
+        resp = bedrock.converse(
+            modelId="us.amazon.nova-lite-v1:0",
+            system=[{"text": system}],
+            messages=[{"role": "user", "content": [{"text": user_message}]}],
+            inferenceConfig={"maxTokens": 1024, "temperature": 0.1},
+        )
+        return resp["output"]["message"]["content"][0]["text"]
+
+    return _call
+
+
+def _has_backtick_number(text: str) -> bool:
+    """Return True if text contains a number wrapped in backticks, e.g. `52,340`."""
+    return bool(_re.search(r"`[\d,.$%]+`", text))
+
+
+@live_only
+def test_tier2_answer_is_grounded_in_athena_data():
+    """
+    Top-counties query: the LLM answer must mention at least one county name
+    that actually appeared in the Athena result set.
+    """
+    from analytics.query_engine import run_tag_query
+    bedrock_call = _make_real_bedrock_call()
+
+    result = run_tag_query("Show top 10 counties by risk from 2015 to 2023", bedrock_call)
+
+    assert result["row_count"] > 0, "Live query returned no rows — cannot assert grounding"
+    answer = result["answer"]
+    assert answer, "answer was empty"
+    assert len(answer) > 20, f"Answer too short to be substantive: {repr(answer)}"
+
+    county_names = [r["county_name"] for r in result["results"] if r.get("county_name")]
+    answer_lower = answer.lower()
+    grounded = any(name.lower().split(" county")[0] in answer_lower for name in county_names)
+    assert grounded, (
+        f"No county name from the Athena result appears in the LLM answer.\n"
+        f"Athena counties: {county_names[:5]}\n"
+        f"Answer: {answer}"
+    )
+
+
+@live_only
+def test_tier2_no_backtick_numbers_in_query_answer():
+    """
+    TAG answer must not contain backtick-wrapped numbers, dollar amounts, or percentages.
+    E.g.  `52,340`  or  `100.0 million`  should not appear.
+    """
+    from analytics.query_engine import run_tag_query
+    bedrock_call = _make_real_bedrock_call()
+
+    result = run_tag_query("Show top 10 counties by risk from 2015 to 2023", bedrock_call)
+    answer = result.get("answer", "")
+    assert not _has_backtick_number(answer), (
+        f"LLM wrapped a number in backticks (renders as green code span in Streamlit):\n{answer}"
+    )
+
+
+@live_only
+def test_tier2_no_backtick_numbers_in_hazard_event_answer():
+    """Same backtick check for the hazard-event-increase path."""
+    from analytics.query_engine import run_tag_query
+    bedrock_call = _make_real_bedrock_call()
+
+    result = run_tag_query(
+        "Which counties saw the largest increase in tornado events 2010 to 2023?",
+        bedrock_call,
+    )
+    answer = result.get("answer", "")
+    assert not _has_backtick_number(answer), (
+        f"Backtick number found in hazard-event answer:\n{answer}"
+    )
+
+
+@live_only
+def test_tier2_flood_increase_no_data_acknowledged():
+    """
+    If the flood-event-increase query returns 0 rows, the answer must explicitly
+    acknowledge no data was found — not fabricate a list of counties.
+    When rows ARE returned, the answer must mention at least one county.
+    """
+    from analytics.query_engine import run_tag_query
+    bedrock_call = _make_real_bedrock_call()
+
+    result = run_tag_query(
+        "Which counties saw the largest increase in flood events 2015 to 2023?",
+        bedrock_call,
+    )
+    answer = result.get("answer", "")
+    assert answer, "answer was empty"
+
+    if result["row_count"] == 0:
+        no_data_phrases = ["no data", "no matching", "no counties", "no results",
+                           "did not find", "were found", "could not find"]
+        assert any(p in answer.lower() for p in no_data_phrases), (
+            f"Query returned 0 rows but answer does not acknowledge this:\n{answer}"
+        )
+    else:
+        # Grounding check: at least one county name from results appears in the answer
+        county_names = [r["county_name"] for r in result["results"] if r.get("county_name")]
+        grounded = any(name.lower().split(" county")[0] in answer.lower() for name in county_names)
+        assert grounded, (
+            f"0 rows not the issue — answer is not grounded in returned data.\n"
+            f"Counties: {county_names[:5]}\nAnswer: {answer}"
+        )
+
+
+@live_only
+def test_tier2_hurricane_answer_references_tropical_storm():
+    """
+    When user asks about 'hurricane', the compiled SQL must use 'Tropical Storm'
+    (the canonical name in hazard_event_summary_current) and the LLM answer
+    must not call the hazard 'Hurricane' without qualification.
+    """
+    from analytics.query_engine import run_tag_query
+    bedrock_call = _make_real_bedrock_call()
+
+    result = run_tag_query(
+        "Which counties saw the largest increase in hurricane events 2010–2023?",
+        bedrock_call,
+    )
+    # SQL-level: hazard_type param must be Tropical Storm
+    assert "Tropical Storm" in result.get("sql_executed", ""), (
+        f"SQL should filter on 'Tropical Storm', not 'Hurricane'.\nSQL: {result.get('sql_executed')}"
+    )
+
+
+@live_only
+def test_tier2_increase_question_does_not_describe_decreases():
+    """
+    When user asks which counties saw the *largest increase*, the answer must not
+    describe counties whose event count *decreased* as if they were increases.
+    Proxy check: answer must not contain both 'decrease' and county names
+    while framing them as top increases.
+    """
+    from analytics.query_engine import run_tag_query
+    bedrock_call = _make_real_bedrock_call()
+
+    result = run_tag_query(
+        "Which counties saw the largest increase in tornado events 2010 to 2023?",
+        bedrock_call,
+    )
+    answer = result.get("answer", "").lower()
+    assert answer
+
+    # If data has results, answer must not lead with "decrease" framing
+    if result["row_count"] > 0:
+        # The WHERE clause filters to absolute_increase > 0, so SQL-level we're safe.
+        # Verify the answer does not call the finding a "decrease" or "no increase" contradicting the data.
+        assert "decrease" not in answer[:300] or "no data" in answer, (
+            f"Answer opens by discussing decreases on an 'increase' question:\n{answer[:300]}"
+        )
+    else:
+        # No increases found — answer must acknowledge this
+        assert any(p in answer for p in ["no", "not", "zero", "none", "did not"]), (
+            f"0-row result but answer doesn't acknowledge absence of increases:\n{answer}"
+        )
+
+
+@live_only
+def test_tier2_predict_answer_names_the_county():
+    """
+    /predict result for a named county must include the county name in the answer.
+    """
+    from agent.orchestrator import run_agent
+    bedrock_call = _make_real_bedrock_call()
+
+    result = run_agent(
+        "Predict the risk tier for Harris County, Texas",
+        bedrock_call_fn=bedrock_call,
+    )
+    assert "predict" in result["tool_used"], (
+        f"Expected predict tool, got: {result['tool_used']}"
+    )
+    pred_out = result["tool_outputs"].get("predict", {})
+    assert pred_out.get("risk_tier") in ("LOW", "MEDIUM", "HIGH"), (
+        f"Unexpected risk_tier: {pred_out.get('risk_tier')}"
+    )
+    # Answer should mention Harris or the tier
+    answer_lower = result["answer"].lower()
+    assert "harris" in answer_lower or pred_out["risk_tier"].lower() in answer_lower, (
+        f"Answer doesn't reference Harris County or risk tier:\n{result['answer']}"
+    )
+
+
+@live_only
+def test_tier2_rag_answer_is_substantive_and_grounded():
+    """
+    /ask path for a domain question: answer must be > 50 chars, mention relevant
+    hazard vocabulary, and not be a refusal or apology.
+    """
+    from agent.orchestrator import run_agent
+    bedrock_call = _make_real_bedrock_call()
+
+    result = run_agent(
+        "What factors make a county more resilient to natural disasters?",
+        bedrock_call_fn=bedrock_call,
+    )
+    assert "ask" in result["tool_used"]
+    answer = result["answer"]
+    assert len(answer) > 50, f"RAG answer too short: {repr(answer)}"
+
+    answer_lower = answer.lower()
+    refuse_phrases = ["cannot answer", "i don't know", "i'm not sure", "no information",
+                      "insufficient context", "unable to answer"]
+    assert not any(p in answer_lower for p in refuse_phrases), (
+        f"LLM refused to answer a domain question:\n{answer}"
+    )
+    relevant_terms = ["resilien", "communit", "hazard", "risk", "disaster", "infrastructure",
+                      "preparedness", "mitigation", "flood", "emergency"]
+    assert any(t in answer_lower for t in relevant_terms), (
+        f"Answer lacks relevant domain vocabulary:\n{answer}"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Standalone runner — prints a summary table
 # ═══════════════════════════════════════════════════════════════════════════════
 

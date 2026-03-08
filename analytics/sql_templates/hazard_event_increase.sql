@@ -34,5 +34,6 @@ SELECT
 FROM period_a a
 JOIN period_b b ON a.county_fips = b.county_fips
 JOIN gold_hazard.county_dim d ON a.county_fips = d.county_fips
+WHERE (b.total_events_b - a.total_events_a) > 0
 ORDER BY absolute_increase DESC
 LIMIT {limit};

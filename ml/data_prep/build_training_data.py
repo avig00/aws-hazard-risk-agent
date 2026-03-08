@@ -271,7 +271,8 @@ def split_and_save(
 ) -> tuple:
     """Stratified train/test split and persist to Parquet (local or S3)."""
     cols = feature_cols + [target_col, stratify_col]
-    cols = [c for c in cols if c in df.columns]
+    # Deduplicate while preserving order (target_col and stratify_col are often the same)
+    cols = list(dict.fromkeys(c for c in cols if c in df.columns))
     df_clean = df[cols].dropna(subset=[target_col])
 
     train_df, test_df = train_test_split(
@@ -315,7 +316,11 @@ def run(output_dir=None):
     feat_cfg = config["features"]
 
     df = pull_gold_data(data_cfg["database"], data_cfg["table"])
-    df = add_risk_bucket(df, data_cfg["target_column"])
+    # risk_bucket is derived from fema_total_damage tertiles (classification target).
+    # Skip if the gold layer already contains risk_bucket (e.g. after a data repair that
+    # pre-computed the column); otherwise derive it from fema_total_damage.
+    if "risk_bucket" not in df.columns:
+        df = add_risk_bucket(df, "fema_total_damage")
 
     feature_cols = feat_cfg["numeric"] + feat_cfg.get("categorical", [])
     feature_cols = [c for c in feature_cols if c in df.columns]

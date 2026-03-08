@@ -73,9 +73,9 @@ TAG and RAG are combined in the hybrid route: the TAG narrative is prepended int
 | ML Training + Deployment | SageMaker Pipelines + XGBoost |
 | Experiment Tracking | MLflow |
 | Feature + Gold Analytics | Athena (Gold-layer only) |
-| Analytics Synthesis (TAG) | Bedrock Claude 3 Sonnet over Athena results |
+| Analytics Synthesis (TAG) | Amazon Nova Lite (Bedrock Converse API) over Athena results |
 | Vector Database | Pinecone (free tier, cosine) |
-| Document Synthesis (RAG) | Bedrock Claude 3 Sonnet over retrieved chunks |
+| Document Synthesis (RAG) | Amazon Nova Lite (Bedrock Converse API) over retrieved chunks |
 | Serving Layer | ECS Fargate + API Gateway |
 | Infrastructure as Code | Terraform |
 | Frontend | Streamlit Cloud |
@@ -208,6 +208,83 @@ The `/query` analytics tool enforces strict guardrails:
 
 ---
 
+## ML Model — County Risk Classifier
+
+The `/predict` tool invokes a **3-class XGBoost classifier** that assigns each U.S. county a risk tier: **LOW**, **MEDIUM**, or **HIGH**.
+
+### What the model predicts
+
+> *"Given a county's storm history, demographic profile, and geography, which third of historical FEMA total damage does this county fall into?"*
+
+The target `risk_bucket` is derived by binning `fema_total_damage` into equal tertiles:
+
+| Class | Label | Meaning |
+|---|---|---|
+| 0 | LOW | Bottom third of cumulative FEMA damage nationally |
+| 1 | MEDIUM | Middle third |
+| 2 | HIGH | Top third — counties with highest cumulative disaster costs |
+
+### Training setup
+
+| Parameter | Value |
+|---|---|
+| Algorithm | XGBoost (`multi:softmax`, 3 classes) |
+| Training rows | 2,552 counties (80% stratified split) |
+| Test rows | 638 counties |
+| Features | 94 (storm history + demographics + geography, one-hot state encoding) |
+| Hyperparameters | max_depth=4, lr=0.05, n_estimators=800, subsample=0.8, col_bytree=0.6 |
+| Validation | 5-fold stratified cross-validation |
+| Experiment tracking | MLflow autolog (params, metrics, SHAP artifacts) |
+
+### Results
+
+| Metric | Score |
+|---|---|
+| Test accuracy | **70.5%** (vs. 33% random baseline) |
+| Test balanced accuracy | **70.5%** |
+| CV balanced accuracy | **71.0% ± 1.1%** (stable across folds) |
+| F1 macro | 0.70 |
+
+**Confusion matrix (638 test counties):**
+
+```
+              Predicted
+              LOW   MED   HIGH
+Actual  LOW   170    16    27    (recall 80%)
+        MED    40   131    41    (recall 62%)
+        HIGH   24    40   149    (recall 70%)
+```
+
+Key pattern: misclassifications are almost exclusively *adjacent* tiers (LOW↔MEDIUM, MEDIUM↔HIGH) — the model makes no extreme errors confusing LOW counties for HIGH.
+
+### Feature importance (SHAP)
+
+Top features by mean |SHAP| value, ranked:
+
+```
+1.  state_Texas              — Texas accounts for a disproportionate share of HIGH-risk counties
+2.  tornado_events           — count of NOAA-recorded tornado events per county
+3.  flood_total_damage       — log-scaled cumulative flood property damage (NOAA)
+4.  wind_total_damage        — log-scaled wind event damage
+5.  flood_events             — count of flood events
+6.  noaa_total_property_damage — total NOAA-estimated property damage across all hazard types
+7.  tropical_events          — tropical storm event count
+8.  hail_total_damage        — hail property damage
+9.  wind_events              — wind event count
+10. state_Florida            — coastal/hurricane exposure signal
+```
+
+> **Note on NRI scores:** FEMA's National Risk Index scores (`nri_risk_score`, `nri_eal_score`, etc.) were intentionally excluded. Although they improve raw test accuracy, they are computed from the same FEMA damage data as the target — circular reasoning. Cross-validation confirms the storm-history-only model generalises better (CV 71.0% ± 1.1% vs. 70.8% ± 2.0% with NRI).
+
+### Limitations
+
+- **Cross-sectional, not temporal** — the model uses county-level aggregates, not year-by-year predictions. It answers "what tier does this county belong to?", not "what will happen in 2025?"
+- **Geography encoded via state** — fine-grained geographic effects (coastal proximity, elevation) are captured only through state dummies and storm history counts
+- **Adjacent-class confusion** — MEDIUM counties are harder to classify (recall 62%) because they sit between two extremes; real-world decisions should treat MEDIUM predictions with appropriate uncertainty
+- **Training data vintage** — trained on data through 2023; counties undergoing rapid development or land-use change may shift tiers
+
+---
+
 ## MLOps
 
 | Concern | Implementation |
@@ -246,8 +323,8 @@ The agent operates exclusively on the **Gold layer** — curated analytical tabl
 - `gold_county_risk_scores` — NRI expected loss, exposure, vulnerability, resilience
 - `gold_risk_feature_mart` — ML-ready feature set combining all Gold sources
 
-**ML target:** `NRI_ExpectedLoss` (continuous regression)
-**ML features:** Hazard event frequencies, FEMA claim volumes/amounts, NRI indicators, Census socioeconomic variables
+**ML target:** `risk_bucket` — LOW / MEDIUM / HIGH tier derived from FEMA total damage tertiles (multi-class classification)
+**ML features:** Hazard event frequencies, property damage estimates, Census socioeconomic variables, and state geography (94 features after one-hot encoding)
 
 ---
 

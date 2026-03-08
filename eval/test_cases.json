@@ -1,0 +1,112 @@
+[
+  {
+    "id": "q1_top_risk",
+    "tool": "query",
+    "question": "Which counties have the highest expected annual loss from 2015 to 2023?",
+    "intent": "top_counties_by_risk",
+    "criteria": {
+      "faithfulness": "Answer must cite specific county names and dollar figures that appear in the data. Must not invent counties or numbers not present in the results.",
+      "relevance": "Answer must directly address the question about expected annual loss rankings.",
+      "groundedness": "All dollar figures and county names stated must be traceable to the Athena result rows."
+    }
+  },
+  {
+    "id": "q2_flood_increase",
+    "tool": "query",
+    "question": "Which counties saw the largest increase in flood events from 2015 to 2023?",
+    "intent": "hazard_event_increase",
+    "criteria": {
+      "faithfulness": "If data shows increases, answer must cite counties with positive absolute_increase values. If 0 rows, answer must acknowledge no increases were found — not describe decreases as increases.",
+      "relevance": "Answer must focus on flood events specifically, not all-hazard NRI scores.",
+      "groundedness": "Event counts and percentages mentioned must match the returned rows."
+    }
+  },
+  {
+    "id": "q3_hurricane_synonym",
+    "tool": "query",
+    "question": "Which counties saw the largest increase in hurricane events from 2010 to 2023?",
+    "intent": "hazard_event_increase",
+    "criteria": {
+      "faithfulness": "Answer must reflect that 'hurricane' maps to 'Tropical Storm' in this dataset. Must not claim to have queried a 'Hurricane' hazard type.",
+      "relevance": "Answer must address event increases, not just general hurricane risk.",
+      "groundedness": "SQL must reference 'Tropical Storm'; answer must not contradict what the data shows."
+    }
+  },
+  {
+    "id": "q4_county_comparison",
+    "tool": "query",
+    "question": "Compare Harris County TX and Miami-Dade County FL disaster risk from 2015 to 2023",
+    "intent": "county_comparison",
+    "criteria": {
+      "faithfulness": "Answer must compare both counties specifically. Must not mix up which county has higher/lower values.",
+      "relevance": "Answer must directly compare the two named counties on relevant metrics.",
+      "groundedness": "Risk scores, expected loss figures, and years-on-record cited must match the Athena rows for those counties."
+    }
+  },
+  {
+    "id": "q5_predict_harris",
+    "tool": "predict",
+    "question": "Predict the risk tier for Harris County, Texas",
+    "intent": "predict",
+    "criteria": {
+      "faithfulness": "Answer must state the predicted risk tier (HIGH/MEDIUM/LOW) returned by the model. Must not invent a tier.",
+      "relevance": "Answer must be specific to Harris County, not a generic risk statement.",
+      "groundedness": "The tier stated in the answer must match the risk_tier field in the predict tool output."
+    }
+  },
+  {
+    "id": "q6_trend_wildfire",
+    "tool": "query",
+    "question": "Show the year-over-year trend of wildfire events from 2010 to 2023",
+    "intent": "hazard_trend_by_year",
+    "criteria": {
+      "faithfulness": "Answer must describe the trend direction (increasing/decreasing/flat) based on the actual year-by-year data, not assert a direction not supported by the numbers.",
+      "relevance": "Answer must address wildfire events over time, not a static snapshot.",
+      "groundedness": "Specific years or counts mentioned must appear in the returned rows."
+    }
+  },
+  {
+    "id": "q7_rag_coastal",
+    "tool": "ask",
+    "question": "Why are coastal counties more vulnerable to hurricanes?",
+    "intent": "ask",
+    "criteria": {
+      "faithfulness": "Answer must not claim the retrieved documents say things they do not say. May use general domain knowledge when documents are sparse.",
+      "relevance": "Answer must address coastal vulnerability and hurricane risk specifically.",
+      "groundedness": "Answer should reference storm surge, wind exposure, or elevation — standard factors — not hallucinate novel claims."
+    }
+  },
+  {
+    "id": "q8_rag_nri_methodology",
+    "tool": "ask",
+    "question": "What is the NRI expected loss methodology?",
+    "intent": "ask",
+    "criteria": {
+      "faithfulness": "Answer must describe the NRI framework accurately. Must not contradict standard FEMA/NRI documentation.",
+      "relevance": "Answer must address the expected loss calculation methodology specifically.",
+      "groundedness": "Should reference hazard frequency, exposure, vulnerability, or similar NRI components — not refuse or give a vague non-answer."
+    }
+  },
+  {
+    "id": "q9_fema_declarations",
+    "tool": "query",
+    "question": "Which states had the most FEMA declarations from 2020 to 2023?",
+    "intent": "top_counties_by_risk",
+    "criteria": {
+      "faithfulness": "Answer must cite state-level or county-level FEMA declaration counts from the data. Must not fabricate rankings.",
+      "relevance": "Answer must address FEMA declarations specifically, not general risk scores.",
+      "groundedness": "Declaration counts and state/county names mentioned must appear in the returned rows."
+    }
+  },
+  {
+    "id": "q10_hybrid",
+    "tool": "hybrid",
+    "question": "Show top 10 counties by predicted risk and property damage",
+    "intent": "hybrid_predict_query",
+    "criteria": {
+      "faithfulness": "Answer must present both ML prediction results and Athena analytics data. Must not claim ML model made a prediction if only query tool was used.",
+      "relevance": "Answer must address both predicted risk tiers and property damage figures.",
+      "groundedness": "Risk tiers from /predict and damage figures from /query must both appear and be correctly attributed."
+    }
+  }
+]
