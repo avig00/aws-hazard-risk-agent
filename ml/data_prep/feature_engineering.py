@@ -126,6 +126,26 @@ def engineer_features(df: pd.DataFrame, config: dict = None) -> pd.DataFrame:
     # 6. Remove non-feature identifier columns
     df = drop_non_features(df)
 
+    # 7. Explicit column whitelist: keep only allowed numeric features, their log
+    #    variants, state dummies, and passthrough ID/target columns.
+    #    This ensures raw Parquet columns not in the config (e.g. *_total_damage
+    #    from older builds) cannot silently leak into the feature matrix.
+    _passthrough = {
+        "county_fips", "year", "risk_bucket", "damage_bucket", "fema_total_damage",
+    }
+    _allowed_numeric = set(feat_cfg.get("numeric", []))
+    keep = [
+        col for col in df.columns
+        if col in _allowed_numeric
+        or col in _passthrough
+        or col.endswith("_log")
+        or col.startswith("state_")
+    ]
+    dropped = set(df.columns) - set(keep)
+    if dropped:
+        logger.info("Whitelist dropped %d unlisted columns: %s", len(dropped), sorted(dropped))
+    df = df[keep]
+
     logger.info("Feature engineering complete: %d rows, %d columns", len(df), len(df.columns))
     return df
 

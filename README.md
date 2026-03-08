@@ -99,7 +99,7 @@ The platform operates on national-scale hazard data:
 
 - 3,000+ U.S. counties across all 50 states
 - 13 years of disaster history (2010–2023)
-- 94 ML features per county (storm history, demographics, geography)
+- 74 ML features per county (storm event counts, demographics, geography)
 - NOAA hazard event records aggregated across 20+ hazard types (county × hazard × year grain)
 - FEMA disaster declarations, property damage, and individual assistance data
 
@@ -182,7 +182,7 @@ The target `risk_bucket` is derived by binning `fema_total_damage` into equal te
 | Algorithm | XGBoost (`multi:softmax`, 3 classes) |
 | Training rows | 2,552 counties (80% stratified split) |
 | Test rows | 638 counties |
-| Features | 94 (storm history + demographics + geography, one-hot state encoding) |
+| Features | 74 (storm event counts + demographics + geography, one-hot state encoding) |
 | Hyperparameters | max_depth=4, lr=0.05, n_estimators=800, subsample=0.8, col_bytree=0.6 |
 | Validation | 5-fold stratified cross-validation |
 | Experiment tracking | MLflow autolog (params, metrics, SHAP artifacts) |
@@ -191,22 +191,22 @@ The target `risk_bucket` is derived by binning `fema_total_damage` into equal te
 
 | Metric | Score |
 |---|---|
-| Test accuracy | **70.5%** (vs. 33% random baseline) |
-| Test balanced accuracy | **70.5%** |
-| CV balanced accuracy | **71.0% ± 1.1%** (stable across folds) |
-| F1 macro | 0.70 |
+| Test accuracy | **69.3%** (vs. 33% random baseline) |
+| Test balanced accuracy | **69.3%** |
+| CV balanced accuracy | **67.9% ± 2.3%** |
+| F1 macro | 0.69 |
 
 **Confusion matrix (638 test counties):**
 
 ```
               Predicted
               LOW   MED   HIGH
-Actual  LOW   170    16    27    (recall 80%)
-        MED    40   131    41    (recall 62%)
-        HIGH   24    40   149    (recall 70%)
+Actual  LOW   169    11    33    (recall 79%)
+        MED    41   130    41    (recall 61%)
+        HIGH   32    38   143    (recall 67%)
 ```
 
-Key pattern: misclassifications are almost exclusively *adjacent* tiers (LOW↔MEDIUM, MEDIUM↔HIGH) — the model makes no extreme errors confusing LOW counties for HIGH.
+Key pattern: MEDIUM is the hardest tier to classify (61% recall), with errors split symmetrically between LOW and HIGH. LOW counties show a notable skip-level pattern — more are misclassified as HIGH (33) than as MEDIUM (11) — likely reflecting counties with high storm frequency but historically moderate FEMA payouts, which share event-count features with genuinely HIGH-risk counties.
 
 ### Feature importance (SHAP)
 
@@ -214,18 +214,18 @@ Top features by mean |SHAP| value, ranked:
 
 ```
 1.  state_Texas              — Texas accounts for a disproportionate share of HIGH-risk counties
-2.  tornado_events           — count of NOAA-recorded tornado events per county
-3.  flood_total_damage       — log-scaled cumulative flood property damage (NOAA)
-4.  wind_total_damage        — log-scaled wind event damage
-5.  flood_events             — count of flood events
-6.  noaa_total_property_damage — total NOAA-estimated property damage across all hazard types
-7.  tropical_events          — tropical storm event count
-8.  hail_total_damage        — hail property damage
-9.  wind_events              — wind event count
-10. state_Florida            — coastal/hurricane exposure signal
+2.  flood_events             — count of NOAA-recorded flood events per county
+3.  tornado_events           — count of tornado events per county
+4.  noaa_total_injuries      — total storm-related injuries (proxy for event severity)
+5.  noaa_total_fatalities    — total storm-related fatalities
+6.  tropical_events          — tropical storm event count (Gulf/Atlantic exposure)
+7.  state_Florida            — coastal/hurricane exposure signal
+8.  wind_events              — wind event count
+9.  population_total         — larger populations amplify total damage exposure
+10. state_Kansas             — high tornado frequency state
 ```
 
-> **Note on NRI scores:** FEMA's National Risk Index scores (`nri_risk_score`, `nri_eal_score`, etc.) were intentionally excluded. Although they improve raw test accuracy, they are computed from the same FEMA damage data as the target — circular reasoning. Cross-validation confirms the storm-history-only model generalises better (CV 71.0% ± 1.1% vs. 70.8% ± 2.0% with NRI).
+> **On the 33% random baseline:** The target `risk_bucket` is defined as equal tertiles of `fema_total_damage`, so each class (LOW / MEDIUM / HIGH) contains exactly one-third of counties by construction. A classifier that picks uniformly at random — or always predicts the majority class — would therefore achieve exactly 33% accuracy. The model's 69.3% represents a 2.1× improvement over this baseline.
 
 ### Limitations
 
