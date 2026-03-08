@@ -6,15 +6,41 @@ An enterprise-grade agentic AI system that answers complex county-level disaster
 
 ---
 
-## What It Does
+## TLDR
 
-The agent answers questions like:
+AI-powered disaster risk intelligence agent built on AWS.
 
-> *"Which counties saw the largest increase in flood events from 2015–2023?"*
-> *"Show the top 10 counties by predicted risk and highest average property damage."*
-> *"Why are coastal counties more vulnerable to hurricanes?"*
+- Predicts county-level disaster risk tiers (LOW / MEDIUM / HIGH) using an XGBoost classifier
+- Executes governed NL→SQL analytics over curated FEMA/NOAA hazard datasets via Athena
+- Uses RAG to retrieve and synthesize FEMA reports and hazard documentation
+- Combines ML + analytics + document retrieval through a multi-tool agent router
+- Provides an interactive Streamlit interface for natural language exploration
+
+---
+
+## Why This Matters
+
+Risk modeling teams typically rely on separate tools for analytics dashboards, ML risk models, and disaster research reports. This project demonstrates how an AI agent can unify these capabilities into a single decision-support interface.
+
+The result is a system capable of answering complex analytical questions such as:
+
+- Which regions are seeing the largest increase in hazard exposure?
+- What is the ML-predicted risk tier for a specific county — and what drives it?
+- Why are certain counties historically high-risk, based on FEMA and NOAA documentation?
 
 These queries require real computation over structured datasets and document corpora — not just retrieval.
+
+---
+
+## Architecture Summary
+
+The system operates as a multi-tool AI agent capable of answering complex disaster risk questions using both structured data and document knowledge.
+
+1. The user submits a natural language question via the Streamlit interface
+2. The agent router classifies the question and selects the appropriate toolchain
+3. One or more tools execute in parallel or sequence: ML prediction, governed SQL analytics, or document retrieval
+4. Results are synthesized by an LLM into a grounded, analyst-quality answer
+5. Streamlit presents outputs through charts, tables, source citations, and plain-language explanations
 
 ---
 
@@ -46,7 +72,44 @@ User Question
                     └──────────────┘
 ```
 
-### Tool Routing Logic
+---
+
+## Technology Stack
+
+**Cloud Infrastructure**
+- AWS S3, Athena, Lambda, ECS Fargate, API Gateway, Step Functions, CloudWatch, EventBridge
+
+**ML & MLOps**
+- SageMaker Pipelines · XGBoost · MLflow · SHAP
+
+**LLM & Retrieval**
+- Amazon Bedrock (Nova Lite via Converse API) · Pinecone vector database · Amazon Titan Embeddings
+
+**Application Layer**
+- Streamlit (frontend) · FastAPI (backend API)
+
+**Infrastructure as Code**
+- Terraform
+
+---
+
+## System Scale
+
+The platform operates on national-scale hazard data:
+
+- 3,000+ U.S. counties across all 50 states
+- 13 years of disaster history (2010–2023)
+- 94 ML features per county (storm history, demographics, geography)
+- NOAA hazard event records aggregated across 20+ hazard types (county × hazard × year grain)
+- FEMA disaster declarations, property damage, and individual assistance data
+
+The agent operates exclusively on curated Gold-layer tables that enforce a deterministic analytical grain of **one row per county per year**.
+
+---
+
+## Agent Capabilities
+
+The system combines multiple reasoning tools through an agent router, making it capable of answering questions that no single approach could handle alone:
 
 | Question type | Tools invoked |
 |---|---|
@@ -66,19 +129,187 @@ TAG and RAG are combined in the hybrid route: the TAG narrative is prepended int
 
 ---
 
-## System Components
+## Engineering Design Goals
 
-| Layer | Technology |
+The system was designed to demonstrate production AI platform principles:
+
+- **Deterministic data access** — all analytics queries run through governed SQL templates; no free-form SQL injection possible
+- **Separation of tools** — ML inference, analytics, and retrieval are independent modules with clean interfaces; adding a new tool requires no changes to existing ones
+- **Safe query execution** — Athena guardrails enforce Gold-layer-only access, automatic LIMIT caps, year-range validation, and a 100 MB scan-cost ceiling
+- **Modular agent architecture** — the orchestrator is tool-agnostic; routing rules and tool implementations are decoupled
+- **Reproducible ML pipelines** — SageMaker Pipelines with MLflow experiment tracking, model registry, and manual approval gate
+- **Automated monitoring and retraining** — drift detection via KL divergence, EventBridge-triggered retraining on drift alerts
+
+---
+
+## Governance & Safety
+
+The `/query` endpoint supports two response modes:
+
+- `synthesize: true` (default) — runs the governed Athena query, then calls Bedrock to produce a narrative analyst answer from the results table (TAG pipeline)
+- `synthesize: false` — returns raw Athena rows as JSON, useful for programmatic consumers or cost control
+
+Guardrails enforced on every query:
+
+- **Gold-layer only** — queries must reference `gold_hazard` database
+- **Template-based SQL** — no free-form input, preventing injection
+- **Automatic LIMIT** — every query capped at 100 rows
+- **Year range validation** — prevents full-table scans
+- **Scan-cost cap** — ~100 MB Athena scan limit per query
+
+---
+
+## ML Model — County Risk Classifier
+
+The `/predict` tool invokes a **3-class XGBoost classifier** that assigns each U.S. county a risk tier: **LOW**, **MEDIUM**, or **HIGH**.
+
+### What the model predicts
+
+> *"Given a county's storm history, demographic profile, and geography, which third of historical FEMA total damage does this county fall into?"*
+
+The target `risk_bucket` is derived by binning `fema_total_damage` into equal tertiles:
+
+| Class | Label | Meaning |
+|---|---|---|
+| 0 | LOW | Bottom third of cumulative FEMA damage nationally |
+| 1 | MEDIUM | Middle third |
+| 2 | HIGH | Top third — counties with highest cumulative disaster costs |
+
+### Training setup
+
+| Parameter | Value |
 |---|---|
-| ML Training + Deployment | SageMaker Pipelines + XGBoost |
-| Experiment Tracking | MLflow |
-| Feature + Gold Analytics | Athena (Gold-layer only) |
-| Analytics Synthesis (TAG) | Amazon Nova Lite (Bedrock Converse API) over Athena results |
-| Vector Database | Pinecone (free tier, cosine) |
-| Document Synthesis (RAG) | Amazon Nova Lite (Bedrock Converse API) over retrieved chunks |
-| Serving Layer | ECS Fargate + API Gateway |
-| Infrastructure as Code | Terraform |
-| Frontend | Streamlit Cloud |
+| Algorithm | XGBoost (`multi:softmax`, 3 classes) |
+| Training rows | 2,552 counties (80% stratified split) |
+| Test rows | 638 counties |
+| Features | 94 (storm history + demographics + geography, one-hot state encoding) |
+| Hyperparameters | max_depth=4, lr=0.05, n_estimators=800, subsample=0.8, col_bytree=0.6 |
+| Validation | 5-fold stratified cross-validation |
+| Experiment tracking | MLflow autolog (params, metrics, SHAP artifacts) |
+
+### Results
+
+| Metric | Score |
+|---|---|
+| Test accuracy | **70.5%** (vs. 33% random baseline) |
+| Test balanced accuracy | **70.5%** |
+| CV balanced accuracy | **71.0% ± 1.1%** (stable across folds) |
+| F1 macro | 0.70 |
+
+**Confusion matrix (638 test counties):**
+
+```
+              Predicted
+              LOW   MED   HIGH
+Actual  LOW   170    16    27    (recall 80%)
+        MED    40   131    41    (recall 62%)
+        HIGH   24    40   149    (recall 70%)
+```
+
+Key pattern: misclassifications are almost exclusively *adjacent* tiers (LOW↔MEDIUM, MEDIUM↔HIGH) — the model makes no extreme errors confusing LOW counties for HIGH.
+
+### Feature importance (SHAP)
+
+Top features by mean |SHAP| value, ranked:
+
+```
+1.  state_Texas              — Texas accounts for a disproportionate share of HIGH-risk counties
+2.  tornado_events           — count of NOAA-recorded tornado events per county
+3.  flood_total_damage       — log-scaled cumulative flood property damage (NOAA)
+4.  wind_total_damage        — log-scaled wind event damage
+5.  flood_events             — count of flood events
+6.  noaa_total_property_damage — total NOAA-estimated property damage across all hazard types
+7.  tropical_events          — tropical storm event count
+8.  hail_total_damage        — hail property damage
+9.  wind_events              — wind event count
+10. state_Florida            — coastal/hurricane exposure signal
+```
+
+> **Note on NRI scores:** FEMA's National Risk Index scores (`nri_risk_score`, `nri_eal_score`, etc.) were intentionally excluded. Although they improve raw test accuracy, they are computed from the same FEMA damage data as the target — circular reasoning. Cross-validation confirms the storm-history-only model generalises better (CV 71.0% ± 1.1% vs. 70.8% ± 2.0% with NRI).
+
+### Limitations
+
+- **Cross-sectional, not temporal** — the model uses county-level aggregates, not year-by-year predictions. It answers "what tier does this county belong to?", not "what will happen in 2025?"
+- **Geography encoded via state** — fine-grained geographic effects (coastal proximity, elevation) are captured only through state dummies and storm history counts
+- **Adjacent-class confusion** — MEDIUM counties are harder to classify (recall 62%) because they sit between two extremes; real-world decisions should treat MEDIUM predictions with appropriate uncertainty
+- **Training data vintage** — trained on data through 2023; counties undergoing rapid development or land-use change may shift tiers
+
+---
+
+## MLOps
+
+| Concern | Implementation |
+|---|---|
+| Experiment tracking | MLflow autolog (params, metrics, SHAP artifacts) |
+| Model registry | SageMaker Model Registry with manual approval gate |
+| Data capture | SageMaker `DataCaptureConfig` on endpoint (20% sampling) |
+| Drift detection | KL divergence on feature distributions (daily schedule) |
+| Retraining | EventBridge → Lambda → SageMaker Pipeline (monthly + on-drift) |
+| Alerting | CloudWatch alarms → SNS → email (latency, errors, drift) |
+
+---
+
+## Data Design
+
+The agent operates exclusively on the **Gold layer** — curated analytical tables with one row per county per year:
+
+- `gold_hazard_event_summary` — event counts per county, hazard type, year
+- `gold_county_risk_scores` — NRI expected loss, exposure, vulnerability, resilience
+- `gold_risk_feature_mart` — ML-ready feature set combining all Gold sources
+
+**ML target:** `risk_bucket` — LOW / MEDIUM / HIGH tier derived from FEMA total damage tertiles (multi-class classification)
+**ML features:** Hazard event frequencies, property damage estimates, Census socioeconomic variables, and state geography (94 features after one-hot encoding)
+
+---
+
+## LLM Response Quality
+
+The agent is evaluated end-to-end using an **LLM-as-Judge harness** (Amazon Nova Lite) that scores each response on faithfulness, relevance, and groundedness (1–5 scale). The final evaluation across 10 representative questions scores **4.5 / 5.0 average with 8 PASS, 2 WARN, and 0 FAIL** — no hallucination failures across any test case.
+
+| Test Case | Tool | Avg | Verdict |
+|---|---|---|---|
+| Top counties by expected annual loss | query | 5.0 | PASS |
+| Flood event increase by county | query | 5.0 | PASS |
+| Hurricane synonym routing (→ Tropical Storm) | query | 4.3 | PASS |
+| County comparison (Harris County vs Miami-Dade) | query | 5.0 | PASS |
+| Predict risk tier for Harris County | predict | 5.0 | PASS |
+| Wildfire year-over-year trend | query | 2.7 | WARN |
+| Coastal hurricane vulnerability | ask | 4.3 | PASS |
+| NRI expected loss methodology | ask | 3.3 | WARN |
+| FEMA declarations by state | query | 5.0 | PASS |
+| Hybrid: predicted risk + property damage | predict + query | 5.0 | PASS |
+
+The two WARN cases reflect data coverage gaps rather than agent logic failures. The wildfire trend query returns a single year of data — the Gold-layer hazard summary has sparse Wildfire records — so there is no multi-year trend to analyze and the LLM correctly surfaces this limitation. The NRI methodology case relies on the RAG tool; without a Pinecone API key in the eval environment, it falls back to domain knowledge, which the judge penalizes for lack of document citations. Both cases resolve in a fully configured production deployment.
+
+---
+
+## Snowflake-Native Equivalent Architecture
+
+This project uses AWS-native tooling. The same design maps directly onto Snowflake's AI platform:
+
+| This Project (AWS) | Snowflake Equivalent |
+|---|---|
+| Athena + Gold-layer S3 tables | Snowflake SQL + Gold-layer tables |
+| Governed NL→SQL `/query` tool | **Cortex Analyst** |
+| Pinecone vector search | **Cortex Search** |
+| Bedrock Claude LLM synthesis | **Cortex LLM Functions** (`COMPLETE`) |
+| SageMaker Pipelines + MLflow | **Snowflake ML** (feature store, model registry) |
+| Streamlit Cloud frontend | **Streamlit in Snowflake** |
+
+The architectural pattern — governed analytics + vector retrieval + LLM synthesis + Streamlit UI — is identical to Snowflake Cortex AI, built from first principles on AWS.
+
+---
+
+## Example Questions
+
+| Question | Tool(s) |
+|---|---|
+| "Top 10 counties by flood risk 2015–2023" | `/query` |
+| "Counties with largest increase in tornado events" | `/query` |
+| "Show predicted risk vs property damage for Texas" | `/predict` + `/query` |
+| "Why is Harris County flood risk so high?" | `/ask` |
+| "What does NRI expected loss measure?" | `/ask` |
+| "Compare Harris County and Miami-Dade hazard profiles" | `/query` |
 
 ---
 
@@ -188,174 +419,3 @@ python rag/indexing/embed_and_index.py
 ```bash
 pytest tests/ -v
 ```
-
----
-
-## Governance & Safety
-
-The `/query` endpoint supports two response modes:
-
-- `synthesize: true` (default) — runs the governed Athena query, then calls Bedrock Claude to produce a narrative analyst answer from the results table (TAG pipeline)
-- `synthesize: false` — returns raw Athena rows as JSON, useful for programmatic consumers or cost control
-
-The `/query` analytics tool enforces strict guardrails:
-
-- **Gold-layer only** — queries must reference `hazard_gold` database
-- **Template-based SQL** — no free-form input, preventing injection
-- **Automatic LIMIT** — every query capped at 100 rows
-- **Year range validation** — prevents full-table scans
-- **Scan-cost cap** — ~100 MB Athena scan limit per query
-
----
-
-## ML Model — County Risk Classifier
-
-The `/predict` tool invokes a **3-class XGBoost classifier** that assigns each U.S. county a risk tier: **LOW**, **MEDIUM**, or **HIGH**.
-
-### What the model predicts
-
-> *"Given a county's storm history, demographic profile, and geography, which third of historical FEMA total damage does this county fall into?"*
-
-The target `risk_bucket` is derived by binning `fema_total_damage` into equal tertiles:
-
-| Class | Label | Meaning |
-|---|---|---|
-| 0 | LOW | Bottom third of cumulative FEMA damage nationally |
-| 1 | MEDIUM | Middle third |
-| 2 | HIGH | Top third — counties with highest cumulative disaster costs |
-
-### Training setup
-
-| Parameter | Value |
-|---|---|
-| Algorithm | XGBoost (`multi:softmax`, 3 classes) |
-| Training rows | 2,552 counties (80% stratified split) |
-| Test rows | 638 counties |
-| Features | 94 (storm history + demographics + geography, one-hot state encoding) |
-| Hyperparameters | max_depth=4, lr=0.05, n_estimators=800, subsample=0.8, col_bytree=0.6 |
-| Validation | 5-fold stratified cross-validation |
-| Experiment tracking | MLflow autolog (params, metrics, SHAP artifacts) |
-
-### Results
-
-| Metric | Score |
-|---|---|
-| Test accuracy | **70.5%** (vs. 33% random baseline) |
-| Test balanced accuracy | **70.5%** |
-| CV balanced accuracy | **71.0% ± 1.1%** (stable across folds) |
-| F1 macro | 0.70 |
-
-**Confusion matrix (638 test counties):**
-
-```
-              Predicted
-              LOW   MED   HIGH
-Actual  LOW   170    16    27    (recall 80%)
-        MED    40   131    41    (recall 62%)
-        HIGH   24    40   149    (recall 70%)
-```
-
-Key pattern: misclassifications are almost exclusively *adjacent* tiers (LOW↔MEDIUM, MEDIUM↔HIGH) — the model makes no extreme errors confusing LOW counties for HIGH.
-
-### Feature importance (SHAP)
-
-Top features by mean |SHAP| value, ranked:
-
-```
-1.  state_Texas              — Texas accounts for a disproportionate share of HIGH-risk counties
-2.  tornado_events           — count of NOAA-recorded tornado events per county
-3.  flood_total_damage       — log-scaled cumulative flood property damage (NOAA)
-4.  wind_total_damage        — log-scaled wind event damage
-5.  flood_events             — count of flood events
-6.  noaa_total_property_damage — total NOAA-estimated property damage across all hazard types
-7.  tropical_events          — tropical storm event count
-8.  hail_total_damage        — hail property damage
-9.  wind_events              — wind event count
-10. state_Florida            — coastal/hurricane exposure signal
-```
-
-> **Note on NRI scores:** FEMA's National Risk Index scores (`nri_risk_score`, `nri_eal_score`, etc.) were intentionally excluded. Although they improve raw test accuracy, they are computed from the same FEMA damage data as the target — circular reasoning. Cross-validation confirms the storm-history-only model generalises better (CV 71.0% ± 1.1% vs. 70.8% ± 2.0% with NRI).
-
-### Limitations
-
-- **Cross-sectional, not temporal** — the model uses county-level aggregates, not year-by-year predictions. It answers "what tier does this county belong to?", not "what will happen in 2025?"
-- **Geography encoded via state** — fine-grained geographic effects (coastal proximity, elevation) are captured only through state dummies and storm history counts
-- **Adjacent-class confusion** — MEDIUM counties are harder to classify (recall 62%) because they sit between two extremes; real-world decisions should treat MEDIUM predictions with appropriate uncertainty
-- **Training data vintage** — trained on data through 2023; counties undergoing rapid development or land-use change may shift tiers
-
----
-
-## MLOps
-
-| Concern | Implementation |
-|---|---|
-| Experiment tracking | MLflow autolog (params, metrics, SHAP artifacts) |
-| Model registry | SageMaker Model Registry with manual approval gate |
-| Data capture | SageMaker `DataCaptureConfig` on endpoint (20% sampling) |
-| Drift detection | KL divergence on feature distributions (daily schedule) |
-| Retraining | EventBridge → Lambda → SageMaker Pipeline (monthly + on-drift) |
-| Alerting | CloudWatch alarms → SNS → email (latency, errors, drift) |
-
----
-
-## Snowflake-Native Equivalent Architecture
-
-This project uses AWS-native tooling. The same design maps directly onto Snowflake's AI platform:
-
-| This Project (AWS) | Snowflake Equivalent |
-|---|---|
-| Athena + Gold-layer S3 tables | Snowflake SQL + Gold-layer tables |
-| Governed NL→SQL `/query` tool | **Cortex Analyst** |
-| Pinecone vector search | **Cortex Search** |
-| Bedrock Claude LLM synthesis | **Cortex LLM Functions** (`COMPLETE`) |
-| SageMaker Pipelines + MLflow | **Snowflake ML** (feature store, model registry) |
-| Streamlit Cloud frontend | **Streamlit in Snowflake** |
-
-The architectural pattern — governed analytics + vector retrieval + LLM synthesis + Streamlit UI — is identical to Snowflake Cortex AI, built from first principles on AWS.
-
----
-
-## Data Design
-
-The agent operates exclusively on the **Gold layer** — curated analytical tables with one row per county per year:
-
-- `gold_hazard_event_summary` — event counts per county, hazard type, year
-- `gold_county_risk_scores` — NRI expected loss, exposure, vulnerability, resilience
-- `gold_risk_feature_mart` — ML-ready feature set combining all Gold sources
-
-**ML target:** `risk_bucket` — LOW / MEDIUM / HIGH tier derived from FEMA total damage tertiles (multi-class classification)
-**ML features:** Hazard event frequencies, property damage estimates, Census socioeconomic variables, and state geography (94 features after one-hot encoding)
-
----
-
-## LLM Response Quality
-
-The agent is evaluated end-to-end using an **LLM-as-Judge harness** (Amazon Nova Lite) that scores each response on faithfulness, relevance, and groundedness (1–5 scale). The final evaluation across 10 representative questions scores **4.5 / 5.0 average with 8 PASS, 2 WARN, and 0 FAIL** — no hallucination failures across any test case.
-
-| Test Case | Tool | Avg | Verdict |
-|---|---|---|---|
-| Top counties by expected annual loss | query | 5.0 | PASS |
-| Flood event increase by county | query | 5.0 | PASS |
-| Hurricane synonym routing (→ Tropical Storm) | query | 4.3 | PASS |
-| County comparison (Harris County vs Miami-Dade) | query | 5.0 | PASS |
-| Predict risk tier for Harris County | predict | 5.0 | PASS |
-| Wildfire year-over-year trend | query | 2.7 | WARN |
-| Coastal hurricane vulnerability | ask | 4.3 | PASS |
-| NRI expected loss methodology | ask | 3.3 | WARN |
-| FEMA declarations by state | query | 5.0 | PASS |
-| Hybrid: predicted risk + property damage | predict + query | 5.0 | PASS |
-
-The two WARN cases reflect data coverage gaps rather than agent logic failures. The wildfire trend query returns a single year of data — the Gold-layer hazard summary has sparse Wildfire records — so there is no multi-year trend to analyze and the LLM correctly surfaces this limitation. The NRI methodology case relies on the RAG tool; without a Pinecone API key in the eval environment, it falls back to domain knowledge, which the judge penalizes for lack of document citations. Both cases resolve in a fully configured production deployment.
-
----
-
-## Example Questions
-
-| Question | Tool(s) |
-|---|---|
-| "Top 10 counties by flood risk 2015–2023" | `/query` |
-| "Counties with largest increase in tornado events" | `/query` |
-| "Show predicted risk vs property damage for Texas" | `/predict` + `/query` |
-| "Why is Harris County flood risk so high?" | `/ask` |
-| "What does NRI expected loss measure?" | `/ask` |
-| "Compare Harris County and Miami-Dade hazard profiles" | `/query` |
