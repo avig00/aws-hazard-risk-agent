@@ -68,24 +68,27 @@ def render_tool_badges(tools_used: list, intent: str = "", reason: str = "") -> 
     query → blue  |  ask → purple  |  predict → teal
     """
     _BADGE = {
-        "query":   ("#1E3A5F", "#60A5FA", "🔎 query"),
-        "ask":     ("#3B1F5C", "#C084FC", "📚 ask"),
-        "predict": ("#0F3D35", "#34D399", "🤖 predict"),
+        "query":   ("#1A3354", "#93C5FD", "border:1px solid #2563EB", "🔎 Analytics"),
+        "ask":     ("#2D1A4A", "#D8B4FE", "border:1px solid #7C3AED", "📚 Document Q&A"),
+        "predict": ("#0B3328", "#6EE7B7", "border:1px solid #059669", "🤖 ML Prediction"),
     }
     parts = []
     for tool in tools_used:
-        bg, fg, label = _BADGE.get(tool, ("#1F2937", "#9CA3AF", f"⚙️ {tool}"))
+        bg, fg, border, label = _BADGE.get(tool, ("#1F2937", "#9CA3AF", "border:1px solid #374151", f"⚙️ {tool}"))
         parts.append(
-            f'<span style="background:{bg};color:{fg};padding:3px 10px;'
-            f'border-radius:12px;font-size:0.72rem;font-weight:600;'
-            f'margin-right:6px;letter-spacing:0.03em">{label}</span>'
+            f'<span style="background:{bg};color:{fg};{border};padding:4px 12px;'
+            f'border-radius:12px;font-size:0.78rem;font-weight:600;'
+            f'margin-right:6px;letter-spacing:0.02em;display:inline-block">{label}</span>'
         )
     if intent and intent not in ("—", ""):
         parts.append(
-            f'<span style="color:#4B5563;font-size:0.72rem">'
-            f'intent: <code style="font-size:0.70rem;color:#6B7280">{intent}</code></span>'
+            f'<span style="color:#6B7280;font-size:0.74rem;margin-left:2px">'
+            f'· <code style="font-size:0.72rem;color:#6B7280;background:transparent">{intent}</code></span>'
         )
-    st.markdown("".join(parts), unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="margin-bottom:10px">{"".join(parts)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ── Analytics table ───────────────────────────────────────────────────────────
@@ -117,8 +120,12 @@ def render_analytics_table(results: list, title: str = "Results") -> None:
     col_config = {c: cfg for c, cfg in _COL_CONFIG.items() if c in display_df.columns}
 
     st.markdown(
-        f'<p style="color:#6B7280;font-size:0.8rem;margin-bottom:4px">'
-        f'{len(df)} rows returned</p>',
+        f'<div style="display:flex;align-items:center;gap:10px;margin:12px 0 6px">'
+        f'<span style="color:#E6EDF3;font-size:0.9rem;font-weight:600">📊 {title}</span>'
+        f'<span style="background:#1A3354;color:#93C5FD;border:1px solid #2563EB;'
+        f'padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:500">'
+        f'{len(df)} rows</span>'
+        f'</div>',
         unsafe_allow_html=True,
     )
     st.dataframe(
@@ -273,17 +280,23 @@ def render_prediction_card(prediction: dict) -> None:
     )
 
     if probs:
+        st.markdown(
+            '<p style="color:#6B7280;font-size:0.75rem;margin:8px 0 4px;'
+            'text-transform:uppercase;letter-spacing:0.07em">Class probabilities</p>',
+            unsafe_allow_html=True,
+        )
         cols = st.columns(3)
         tier_order = ["LOW", "MEDIUM", "HIGH"]
         for col, tier in zip(cols, tier_order):
             p = probs.get(tier, 0.0)
             _, tc, ac, ic = _TIER.get(tier, ("#1F2937", "#9CA3AF", "#6B7280", "⚪"))
+            is_predicted = (tier == risk_tier)
             with col:
-                st.markdown(
-                    f'<div style="text-align:center;color:{tc};font-size:0.85rem">'
-                    f'{ic} {tier}<br>'
-                    f'<span style="font-size:1.1rem;font-weight:700">{p:.0%}</span></div>',
-                    unsafe_allow_html=True,
+                st.metric(
+                    label=f"{ic} {tier}",
+                    value=f"{p:.0%}",
+                    delta="predicted" if is_predicted else None,
+                    delta_color="off" if not is_predicted else "normal",
                 )
 
 
@@ -299,16 +312,20 @@ def render_citations(sources: list) -> None:
             doc = src.get("source", "Unknown document")
             hazard = src.get("hazard_type", "")
             score = src.get("score", 0.0)
-            relevance_bar = "█" * round(score * 10)
+            bar_pct = int(score * 100)
             hazard_str = f" · {hazard}" if hazard and hazard != "general" else ""
             st.markdown(
-                f'<div style="padding:6px 0;border-bottom:1px solid #1E2535">'
+                f'<div style="padding:7px 0;border-bottom:1px solid #1E2535">'
                 f'<span style="color:#4F9CF9;font-size:0.8rem;font-weight:600">{i}.</span> '
                 f'<code style="font-size:0.78rem">{doc}</code>'
                 f'<span style="color:#6B7280;font-size:0.75rem">{hazard_str}</span><br>'
-                f'<span style="color:#374151;font-size:0.7rem" title="Relevance: {score:.3f}">'
-                f'{relevance_bar}</span>'
-                f'<span style="color:#6B7280;font-size:0.7rem"> {score:.3f}</span>'
+                f'<div style="margin-top:4px;display:flex;align-items:center;gap:8px">'
+                f'<div style="flex:1;height:4px;background:#1E2535;border-radius:2px;overflow:hidden">'
+                f'<div style="width:{bar_pct}%;height:100%;'
+                f'background:linear-gradient(90deg,#1D4ED8,#4F9CF9);border-radius:2px"></div>'
+                f'</div>'
+                f'<span style="color:#6B7280;font-size:0.7rem;white-space:nowrap">{score:.3f}</span>'
+                f'</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )

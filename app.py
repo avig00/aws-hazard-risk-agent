@@ -50,19 +50,41 @@ def _configure_aws():
 _configure_aws()
 
 
-# ── Global CSS overrides ───────────────────────────────────────────────────────
+# ── Global CSS ────────────────────────────────────────────────────────────────
 st.markdown(
     """
     <style>
-    /* User avatar: slate blue */
+    /* Chat avatars — visible blue shades against the dark background */
     [data-testid="chatAvatarIcon-user"] {
-        background-color: #1E3A5F !important;
-        border: 1px solid #2563EB !important;
+        background-color: #1E40AF !important;
+        border: 2px solid #4F9CF9 !important;
     }
-    /* Assistant avatar: deep teal-blue */
     [data-testid="chatAvatarIcon-assistant"] {
-        background-color: #0C2D48 !important;
-        border: 1px solid #1D4ED8 !important;
+        background-color: #0369A1 !important;
+        border: 2px solid #38BDF8 !important;
+    }
+
+    /* Sidebar secondary buttons → subtle clickable link-row style.
+       Clear conversation uses type="primary" and is unaffected. */
+    section[data-testid="stSidebar"] button[kind="secondary"] {
+        background: transparent !important;
+        border: 1px solid rgba(30, 58, 95, 0.55) !important;
+        border-radius: 6px !important;
+        color: #9CA3AF !important;
+        text-align: left !important;
+        font-size: 0.79rem !important;
+        font-weight: 400 !important;
+        padding: 5px 10px !important;
+        margin: 1px 0 !important;
+        min-height: unset !important;
+        line-height: 1.45 !important;
+        transition: border-color 0.15s, color 0.15s, background 0.15s !important;
+    }
+    section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+        background: rgba(22, 27, 39, 0.9) !important;
+        border-color: #2563EB !important;
+        color: #E6EDF3 !important;
+        box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25) !important;
     }
     </style>
     """,
@@ -113,14 +135,15 @@ with st.sidebar:
                               help="Maximum rows returned from Athena queries")
 
     st.divider()
-    if st.button("🗑️ Clear conversation", use_container_width=True):
+    # type="primary" keeps this button visually distinct from the example buttons below
+    if st.button("🗑️ Clear conversation", use_container_width=True, type="primary"):
         clear_history()
         st.rerun()
 
     st.divider()
     st.markdown(
         '<p style="color:#4B5563;font-size:0.75rem;text-transform:uppercase;'
-        'letter-spacing:0.08em;margin-bottom:8px">Example questions</p>',
+        'letter-spacing:0.08em;margin-bottom:6px">Example questions</p>',
         unsafe_allow_html=True,
     )
     _EXAMPLES = [
@@ -130,13 +153,10 @@ with st.sidebar:
         ("📈", "Show year-over-year wildfire event trends since 2015"),
         ("📚", "What is the NRI expected loss methodology?"),
     ]
-    for icon, ex in _EXAMPLES:
-        st.markdown(
-            f'<p style="color:#9CA3AF;font-size:0.8rem;padding:4px 0;'
-            f'border-left:2px solid #1E3A5F;padding-left:10px;margin:5px 0">'
-            f'<span style="margin-right:6px">{icon}</span>{ex}</p>',
-            unsafe_allow_html=True,
-        )
+    for i, (icon, ex) in enumerate(_EXAMPLES):
+        if st.button(f"{icon}  {ex}", key=f"sidebar_ex_{i}", use_container_width=True):
+            st.session_state.pending_question = ex
+            st.rerun()
 
 
 # ── Main area ─────────────────────────────────────────────────────────────────
@@ -151,6 +171,9 @@ st.markdown(
 )
 
 init_session()
+
+# Consume any pending question injected by sidebar example buttons
+_pending = st.session_state.pop("pending_question", None)
 
 # Welcome state — shown only before the first message
 if not st.session_state.get("messages"):
@@ -167,6 +190,11 @@ if not st.session_state.get("messages"):
               </p>
             </div>
             """,
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<p style="color:#4B5563;font-size:0.78rem;margin-top:4px">'
+            'Click an example in the sidebar to get started.</p>',
             unsafe_allow_html=True,
         )
     st.markdown("<br>", unsafe_allow_html=True)
@@ -195,14 +223,17 @@ if not st.session_state.get("messages"):
 render_history()
 
 # ── Chat input ────────────────────────────────────────────────────────────────
-if prompt := st.chat_input("Ask a hazard risk question…"):
+prompt = st.chat_input("Ask a hazard risk question…") or _pending
+
+if prompt:
     add_message("user", prompt)
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Analyzing…"):
+        with st.status("Analyzing your question…", expanded=False) as _status:
+            _status.write("Routing to tools…")
             try:
                 result = run_agent(
                     question=prompt,
@@ -211,7 +242,10 @@ if prompt := st.chat_input("Ask a hazard risk question…"):
                     bedrock_call_fn=bedrock_call,
                     pinecone_api_key=os.environ.get("PINECONE_API_KEY"),
                 )
+                _status.write("Synthesizing response…")
+                _status.update(label="Done", state="complete", expanded=False)
             except Exception as exc:
+                _status.update(label="Error", state="error", expanded=False)
                 render_error(str(exc))
                 st.stop()
 
@@ -219,6 +253,13 @@ if prompt := st.chat_input("Ask a hazard risk question…"):
         answer = result.get("answer", "")
         sources = result.get("sources", [])
         tool_outputs = result.get("tool_outputs", {})
+
+        # Tool badges first — routing context before the answer
+        if tools_used:
+            render_tool_badges(
+                tools_used,
+                intent=tool_outputs.get("query", {}).get("intent", ""),
+            )
 
         # Detect "no data found" answers — render as warning, not prose
         _NO_DATA_PHRASES = ("no data was found", "no matching records", "no results")
@@ -251,12 +292,6 @@ if prompt := st.chat_input("Ask a hazard risk question…"):
         # RAG citations
         if sources:
             render_citations(sources)
-
-        # Tool badges (routing metadata)
-        render_tool_badges(
-            tools_used,
-            intent=tool_outputs.get("query", {}).get("intent", ""),
-        )
 
         # Save to conversation history (including rich content for re-render)
         add_message(

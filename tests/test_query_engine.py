@@ -18,7 +18,7 @@ from analytics.query_engine import (
 @pytest.mark.parametrize("question,expected_template", [
     ("Show the top 10 counties by risk from 2015 to 2023", "top_counties_by_risk"),
     ("Which counties had the highest average expected loss?", "top_counties_by_risk"),
-    ("Which counties saw the largest increase in flood events from 2010–2022?", "largest_increase"),
+    ("Which counties saw the largest increase in flood events from 2010–2022?", "hazard_event_increase"),
     ("Show me flood event trends by year 2015–2023", "hazard_trend_by_year"),
     ("Compare Harris County vs Miami-Dade over the last 5 years", "county_comparison"),
 ])

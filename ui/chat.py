@@ -46,6 +46,10 @@ def render_history():
             sources = meta.get("sources", [])
             intent = meta.get("intent", "")
 
+            # Tool badges first — routing context before the answer
+            if tools_used:
+                render_tool_badges(tools_used, intent=intent)
+
             # Text answer
             if content and content != "See results above.":
                 if any(p in content.lower() for p in _NO_DATA_PHRASES):
@@ -77,10 +81,6 @@ def render_history():
             # RAG citations
             if sources:
                 render_citations(sources)
-
-            # Tool badges
-            if tools_used:
-                render_tool_badges(tools_used, intent=intent)
 
 
 def clear_history():
