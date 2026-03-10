@@ -258,7 +258,7 @@ The agent operates exclusively on the **Gold layer** — curated analytical tabl
 - `gold_risk_feature_mart` — ML-ready feature set combining all Gold sources
 
 **ML target:** `risk_bucket` — LOW / MEDIUM / HIGH tier derived from FEMA total damage tertiles (multi-class classification)
-**ML features:** Hazard event frequencies, property damage estimates, Census socioeconomic variables, and state geography (94 features after one-hot encoding)
+**ML features:** Hazard event frequencies, non-dollar severity metrics, Census socioeconomic variables, and state geography (74 features after one-hot encoding)
 
 ---
 
@@ -283,20 +283,24 @@ The two WARN cases reflect data coverage gaps rather than agent logic failures. 
 
 ---
 
-## Snowflake-Native Equivalent Architecture
+## Azure Databricks Equivalent Architecture
 
-This project uses AWS-native tooling. The same design maps directly onto Snowflake's AI platform:
+This project uses AWS-native tooling. The same design maps directly onto an Azure Databricks stack:
 
-| This Project (AWS) | Snowflake Equivalent |
+| This Project (AWS) | Azure Databricks Equivalent |
 |---|---|
-| Athena + Gold-layer S3 tables | Snowflake SQL + Gold-layer tables |
-| Governed NL→SQL `/query` tool | **Cortex Analyst** |
-| Pinecone vector search | **Cortex Search** |
-| Bedrock Claude LLM synthesis | **Cortex LLM Functions** (`COMPLETE`) |
-| SageMaker Pipelines + MLflow | **Snowflake ML** (feature store, model registry) |
-| Streamlit Cloud frontend | **Streamlit in Snowflake** |
+| S3 Gold-layer Parquet tables | **Delta Lake** Gold tables on ADLS Gen2 |
+| Athena SQL analytics | **Databricks SQL** Warehouse |
+| Governed NL→SQL `/query` tool | **Databricks Genie** (NL→SQL on Delta tables) |
+| Pinecone vector search | **Databricks Vector Search** (Mosaic AI) |
+| Bedrock LLM synthesis | **Azure OpenAI** via LangChain / DBRX |
+| SageMaker Pipelines | **Databricks Workflows** (DAG-based pipelines) |
+| MLflow experiment tracking | **Managed MLflow** (native to Databricks — same OSS API) |
+| SageMaker Model Registry | **Databricks Unity Catalog** model registry |
+| ECS Fargate + API Gateway | **Azure Container Apps** + Azure API Management |
+| CloudWatch + EventBridge | **Azure Monitor** + Event Grid |
 
-The architectural pattern — governed analytics + vector retrieval + LLM synthesis + Streamlit UI — is identical to Snowflake Cortex AI, built from first principles on AWS.
+Two components in this project are Databricks-native concepts implemented on AWS: MLflow (open-sourced by Databricks) and the Bronze→Silver→Gold **medallion architecture** that structures the data pipeline. The Gold-layer design pattern used here is the same pattern Databricks ships as a reference architecture — it would port to Delta Lake without modification to the analytical grain or the feature mart schema.
 
 ---
 
