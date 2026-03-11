@@ -1,6 +1,6 @@
 # AWS Hazard Risk Intelligence Agent
 
-An enterprise-grade agentic AI system that answers complex county-level disaster risk questions by combining **predictive ML**, **governed NL→SQL analytics**, and **RAG-based document retrieval** — with a live Streamlit dashboard.
+An enterprise-grade agentic AI system that answers complex county-level disaster risk questions by combining predictive ML, governed NL→SQL analytics, and RAG-based document retrieval — with a live Streamlit dashboard.
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://YOUR-APP.streamlit.app)
 
@@ -133,12 +133,12 @@ TAG and RAG are combined in the hybrid route: the TAG narrative is prepended int
 
 The system was designed to demonstrate production AI platform principles:
 
-- **Deterministic data access** — all analytics queries run through governed SQL templates; no free-form SQL injection possible
-- **Separation of tools** — ML inference, analytics, and retrieval are independent modules with clean interfaces; adding a new tool requires no changes to existing ones
-- **Safe query execution** — Athena guardrails enforce Gold-layer-only access, automatic LIMIT caps, year-range validation, and a 100 MB scan-cost ceiling
-- **Modular agent architecture** — the orchestrator is tool-agnostic; routing rules and tool implementations are decoupled
-- **Reproducible ML pipelines** — SageMaker Pipelines with MLflow experiment tracking, model registry, and manual approval gate
-- **Automated monitoring and retraining** — drift detection via KL divergence, EventBridge-triggered retraining on drift alerts
+- Deterministic data access — all analytics queries run through governed SQL templates; no free-form SQL injection possible
+- Separation of tools — ML inference, analytics, and retrieval are independent modules with clean interfaces; adding a new tool requires no changes to existing ones
+- Safe query execution — Athena guardrails enforce Gold-layer-only access, automatic LIMIT caps, year-range validation, and a 100 MB scan-cost ceiling
+- Modular agent architecture — the orchestrator is tool-agnostic; routing rules and tool implementations are decoupled
+- Reproducible ML pipelines — SageMaker Pipelines with MLflow experiment tracking, model registry, and manual approval gate
+- Automated monitoring and retraining — drift detection via KL divergence, EventBridge-triggered retraining on drift alerts
 
 ---
 
@@ -151,17 +151,17 @@ The `/query` endpoint supports two response modes:
 
 Guardrails enforced on every query:
 
-- **Gold-layer only** — queries must reference `gold_hazard` database
-- **Template-based SQL** — no free-form input, preventing injection
-- **Automatic LIMIT** — every query capped at 100 rows
-- **Year range validation** — prevents full-table scans
-- **Scan-cost cap** — ~100 MB Athena scan limit per query
+- Gold-layer only — queries must reference `gold_hazard` database
+- Template-based SQL — no free-form input, preventing injection
+- Automatic LIMIT — every query capped at 100 rows
+- Year range validation — prevents full-table scans
+- Scan-cost cap — ~100 MB Athena scan limit per query
 
 ---
 
 ## ML Model — County Risk Classifier
 
-The `/predict` tool invokes a **3-class XGBoost classifier** that assigns each U.S. county a risk tier: **LOW**, **MEDIUM**, or **HIGH**.
+The `/predict` tool invokes a 3-class XGBoost classifier that assigns each U.S. county a risk tier: LOW, MEDIUM, or HIGH.
 
 ### What the model predicts
 
@@ -196,7 +196,7 @@ The target `risk_bucket` is derived by binning `fema_total_damage` into equal te
 | CV balanced accuracy | **67.9% ± 2.3%** |
 | F1 macro | 0.69 |
 
-**Confusion matrix (638 test counties):**
+Confusion matrix (638 test counties):
 
 ```
               Predicted
@@ -225,14 +225,14 @@ Top features by mean |SHAP| value, ranked:
 10. state_Kansas             — high tornado frequency state
 ```
 
-> **On the 33% random baseline:** The target `risk_bucket` is defined as equal tertiles of `fema_total_damage`, so each class (LOW / MEDIUM / HIGH) contains exactly one-third of counties by construction. A classifier that picks uniformly at random — or always predicts the majority class — would therefore achieve exactly 33% accuracy. The model's 69.3% represents a 2.1× improvement over this baseline.
+> On the 33% random baseline: the target `risk_bucket` is defined as equal tertiles of `fema_total_damage`, so each class (LOW / MEDIUM / HIGH) contains exactly one-third of counties by construction. A classifier that picks uniformly at random — or always predicts the majority class — would therefore achieve exactly 33% accuracy. The model's 69.3% represents a 2.1× improvement over this baseline.
 
 ### Limitations
 
-- **Cross-sectional, not temporal** — the model uses county-level aggregates, not year-by-year predictions. It answers "what tier does this county belong to?", not "what will happen in 2025?"
-- **Geography encoded via state** — fine-grained geographic effects (coastal proximity, elevation) are captured only through state dummies and storm history counts
-- **Adjacent-class confusion** — MEDIUM counties are harder to classify (recall 62%) because they sit between two extremes; real-world decisions should treat MEDIUM predictions with appropriate uncertainty
-- **Training data vintage** — trained on data through 2023; counties undergoing rapid development or land-use change may shift tiers
+- Cross-sectional, not temporal — the model uses county-level aggregates, not year-by-year predictions. It answers "what tier does this county belong to?", not "what will happen in 2025?"
+- Geography encoded via state — fine-grained geographic effects (coastal proximity, elevation) are captured only through state dummies and storm history counts
+- Adjacent-class confusion — MEDIUM counties are harder to classify (recall 62%) because they sit between two extremes; real-world decisions should treat MEDIUM predictions with appropriate uncertainty
+- Training data vintage — trained on data through 2023; counties undergoing rapid development or land-use change may shift tiers
 
 ---
 
@@ -257,14 +257,14 @@ The agent operates exclusively on the **Gold layer** — curated analytical tabl
 - `gold_county_risk_scores` — NRI expected loss, exposure, vulnerability, resilience
 - `gold_risk_feature_mart` — ML-ready feature set combining all Gold sources
 
-**ML target:** `risk_bucket` — LOW / MEDIUM / HIGH tier derived from FEMA total damage tertiles (multi-class classification)
-**ML features:** Hazard event frequencies, non-dollar severity metrics, Census socioeconomic variables, and state geography (74 features after one-hot encoding)
+ML target: `risk_bucket` — LOW / MEDIUM / HIGH tier derived from FEMA total damage tertiles (multi-class classification)
+ML features: hazard event frequencies, non-dollar severity metrics, Census socioeconomic variables, and state geography (74 features after one-hot encoding)
 
 ---
 
 ## LLM Response Quality
 
-The agent is evaluated end-to-end using an **LLM-as-Judge harness** (Amazon Nova Lite) that scores each response on faithfulness, relevance, and groundedness (1–5 scale). The final evaluation across 10 representative questions scores **4.5 / 5.0 average with 8 PASS, 2 WARN, and 0 FAIL** — no hallucination failures across any test case.
+The agent is evaluated end-to-end using an LLM-as-Judge harness (Amazon Nova Lite) that scores each response on faithfulness, relevance, and groundedness (1–5 scale). The final evaluation across 10 representative questions scores 4.5 / 5.0 average with 8 PASS, 2 WARN, and 0 FAIL — no hallucination failures across any test case.
 
 | Test Case | Tool | Avg | Verdict |
 |---|---|---|---|
