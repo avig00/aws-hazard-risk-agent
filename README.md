@@ -4,6 +4,10 @@ An enterprise-grade agentic AI system that answers complex county-level disaster
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://YOUR-APP.streamlit.app)
 
+## App Preview
+
+![App Preview](assets/app-preview.gif)
+
 ---
 
 ## TLDR
