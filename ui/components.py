@@ -272,6 +272,8 @@ def render_risk_map(results: list) -> None:
 def render_prediction_card(prediction: dict) -> None:
     """Display county ML risk prediction with a color-coded tier badge."""
     county = prediction.get("county_name") or prediction.get("county_fips") or "County"
+    state = prediction.get("county_state", "")
+    county_label = f"{county}, {state}" if state else county
     risk_tier = prediction.get("risk_tier", "—")
     probs = prediction.get("probabilities", {})
 
@@ -288,7 +290,7 @@ def render_prediction_card(prediction: dict) -> None:
                     border-radius:6px;padding:12px 16px;margin:8px 0">
           <div style="color:#9CA3AF;font-size:0.75rem;text-transform:uppercase;
                       letter-spacing:0.08em;margin-bottom:2px">ML Risk Prediction</div>
-          <div style="color:#F9FAFB;font-size:1rem;font-weight:600">{county}</div>
+          <div style="color:#F9FAFB;font-size:1rem;font-weight:600">{county_label}</div>
           <div style="color:{text_color};font-size:1.4rem;font-weight:700;margin-top:4px">
             {icon} {risk_tier}
           </div>
