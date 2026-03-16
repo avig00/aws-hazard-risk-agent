@@ -214,6 +214,7 @@ def run_query(
         "intent": intent.template,
         "row_count": len(results),
         "tool": "query",
+        "order_col": clean_params.get("order_col", ""),
     }
 
 

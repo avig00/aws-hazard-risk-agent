@@ -305,7 +305,11 @@ if prompt:
                 if "trend" in intent or intent == "hazard_trend_by_year":
                     render_trend_chart(results_data, chart_key="live")
                 else:
-                    render_analytics_table(results_data, title="Analytics Results", chart_key="live")
+                    render_analytics_table(
+                        results_data, title="Analytics Results",
+                        chart_key="live",
+                        sort_col=query_out.get("order_col", ""),
+                    )
 
             if sql:
                 render_sql_expander(sql)

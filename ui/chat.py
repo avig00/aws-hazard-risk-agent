@@ -68,7 +68,11 @@ def render_history():
                     if "trend" in q_intent or q_intent == "hazard_trend_by_year":
                         render_trend_chart(results_data, chart_key=f"msg{msg_idx}")
                     else:
-                        render_analytics_table(results_data, title="Analytics Results", chart_key=f"msg{msg_idx}")
+                        render_analytics_table(
+                            results_data, title="Analytics Results",
+                            chart_key=f"msg{msg_idx}",
+                            sort_col=query_out.get("order_col", ""),
+                        )
 
                 if sql:
                     render_sql_expander(sql)

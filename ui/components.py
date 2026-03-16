@@ -45,8 +45,8 @@ _HIDDEN_COLS = {"county_fips"}
 # Preferred metric for bar chart (first match wins)
 _CHART_METRIC_PRIORITY = [
     "avg_expected_loss", "absolute_increase", "events_recent_period",
-    "total_fatalities", "total_injuries",
     "total_events", "avg_events_recent", "fema_declaration_count",
+    "total_fatalities", "total_injuries",
     "avg_risk_score",
 ]
 
@@ -97,7 +97,7 @@ def render_tool_badges(tools_used: list, intent: str = "", reason: str = "") -> 
 
 # ── Analytics table ───────────────────────────────────────────────────────────
 
-def render_analytics_table(results: list, title: str = "Results", chart_key: str = "analytics") -> None:
+def render_analytics_table(results: list, title: str = "Results", chart_key: str = "analytics", sort_col: str = "") -> None:
     """
     Display Athena query results as a formatted, interactive dataframe.
     - Numeric columns are formatted with $ / % symbols
@@ -139,15 +139,20 @@ def render_analytics_table(results: list, title: str = "Results", chart_key: str
         hide_index=True,
     )
 
-    # Chart: pick the most meaningful numeric metric
+    # Chart: pick the most meaningful numeric metric.
+    # If sort_col is provided (from the SQL ORDER BY), use it directly so the chart
+    # always reflects the same column the query ranked by.
     numeric_cols = display_df.select_dtypes(include="number").columns.tolist()
     label_col = next(
         (c for c in ["county_name", "state", "year"] if c in display_df.columns), None
     )
-    metric_col = next(
-        (c for c in _CHART_METRIC_PRIORITY if c in numeric_cols),
-        next((c for c in numeric_cols if c not in {"year"}), None),
-    )
+    if sort_col and sort_col in numeric_cols:
+        metric_col = sort_col
+    else:
+        metric_col = next(
+            (c for c in _CHART_METRIC_PRIORITY if c in numeric_cols),
+            next((c for c in numeric_cols if c not in {"year"}), None),
+        )
 
     if not metric_col or not label_col or label_col == "year":
         return
