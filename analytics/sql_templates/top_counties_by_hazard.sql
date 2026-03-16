@@ -15,5 +15,6 @@ JOIN gold_hazard.county_dim c ON h.county_fips = c.county_fips
 WHERE h.hazard_type = '{hazard_type}'
   AND h.year BETWEEN {start_year} AND {end_year}
 GROUP BY h.county_fips, c.county_name, c.state, h.hazard_type
+HAVING {order_col} > 0
 ORDER BY {order_col} DESC
 LIMIT {limit};

@@ -113,6 +113,24 @@ def _compile_sql(template: str, params: dict) -> str:
         raise ValueError(f"Missing template parameter: {exc}")
 
 
+def _expand_combined_hazards(sql: str) -> str:
+    """
+    Expand single-value hazard_type filters to IN clauses for hazards that NOAA
+    splits across multiple event type codes representing the same phenomenon.
+
+    Only Heat / Excessive Heat are combined — these are two NOAA codes for the
+    same hazard; all other hazard types remain as single-value equality filters.
+    """
+    sql = sql.replace(
+        "hazard_type = 'Excessive Heat'",
+        "hazard_type IN ('Excessive Heat', 'Heat')",
+    ).replace(
+        "hazard_type = 'Heat'",
+        "hazard_type IN ('Excessive Heat', 'Heat')",
+    )
+    return sql
+
+
 def _enforce_guardrails(sql: str) -> str:
     """
     Final safety checks on compiled SQL:
@@ -162,7 +180,8 @@ def run_query(
     clean_params = _sanitize_params(intent.params)
     compiled_sql = _compile_sql(raw_template, clean_params)
 
-    # 3. Guardrails
+    # 3. Expand combined hazard types (e.g. Heat + Excessive Heat), then guardrails
+    compiled_sql = _expand_combined_hazards(compiled_sql)
     safe_sql = _enforce_guardrails(compiled_sql)
     logger.info("Compiled SQL:\n%s", safe_sql)
 
