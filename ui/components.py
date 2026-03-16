@@ -32,6 +32,7 @@ _COL_CONFIG = {
     "counties_affected":        st.column_config.NumberColumn("Counties Affected", format="%d"),
     "total_events":             st.column_config.NumberColumn("Total Events", format="%d"),
     "total_fatalities":         st.column_config.NumberColumn("Fatalities", format="%d"),
+    "total_injuries":           st.column_config.NumberColumn("Injuries", format="%d"),
     "avg_property_damage":      st.column_config.NumberColumn("Avg Property Damage ($)", format="$%.0f"),
     "total_fema_declarations":  st.column_config.NumberColumn("FEMA Declarations", format="%d"),
     "avg_events_early":         st.column_config.NumberColumn("Avg Events (Early)", format="%.1f"),

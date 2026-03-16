@@ -45,8 +45,14 @@ def _fetch_county_features(
     s3_output: str = None,
 ) -> tuple:
     """
-    Query Athena for the most recent feature row for a county.
+    Query Athena for cross-sectional feature data for a county.
+
+    Mirrors the ML training query: aggregates risk_feature_mart_current (FEMA/demographic)
+    and hazard_event_summary_current (per-hazard event counts) to produce the same
+    feature vector the model was trained on.
+
     county_identifier is either a 5-digit FIPS string or a county name fragment.
+    Handles hyphenated names (e.g. "Miami-Dade" matches "Miami Dade" in county_dim).
     Returns (features_dict, county_name, county_fips).
     Returns ({}, county_identifier, "") on failure or no results.
     """
@@ -57,19 +63,105 @@ def _fetch_county_features(
         )
 
     if re.match(r"^\d{5}$", county_identifier):
-        where_clause = f"r.county_fips = '{county_identifier}'"
+        county_filter = f"r.county_fips = '{county_identifier}'"
     else:
         safe_name = re.sub(r"[^a-zA-Z \-]", "", county_identifier)[:40].strip()
-        # Exact match — county_dim stores names WITHOUT "County" (e.g. "Harris", "Miami-Dade")
-        where_clause = f"LOWER(d.county_name) = '{safe_name.lower()}'"
+        # Handle hyphenated names: try exact match, hyphen→space variant, and prefix LIKE
+        safe_lower = safe_name.lower()
+        safe_spaces = safe_lower.replace("-", " ")
+        first_word = safe_spaces.split()[0] if safe_spaces.split() else safe_spaces
+        county_filter = (
+            f"(LOWER(d.county_name) = '{safe_lower}' OR "
+            f"LOWER(d.county_name) = '{safe_spaces}' OR "
+            f"LOWER(d.county_name) LIKE '{first_word}%')"
+        )
 
-    sql = (
-        "SELECT r.*, d.county_name, d.state "
-        "FROM gold_hazard.risk_feature_mart r "
-        "JOIN gold_hazard.county_dim d ON r.county_fips = d.county_fips "
-        f"WHERE {where_clause} "
-        "ORDER BY r.year DESC LIMIT 1"
-    )
+    sql = f"""
+WITH base AS (
+    SELECT
+        r.county_fips,
+        d.county_name,
+        d.state,
+        AVG(r.population_total)              AS population_total,
+        AVG(r.median_household_income)       AS median_household_income,
+        AVG(r.median_home_value)             AS median_home_value,
+        AVG(r.in_labor_force)                AS in_labor_force,
+        AVG(r.unemployed)                    AS unemployed,
+        AVG(r.education_universe_total)      AS education_universe_total,
+        AVG(r.high_school_grad)              AS high_school_grad,
+        AVG(r.bachelors)                     AS bachelors,
+        AVG(r.graduate_degree)               AS graduate_degree
+    FROM gold_hazard.risk_feature_mart_current r
+    JOIN gold_hazard.county_dim d ON r.county_fips = d.county_fips
+    WHERE {county_filter}
+    GROUP BY r.county_fips, d.county_name, d.state
+    LIMIT 1
+),
+events AS (
+    SELECT
+        e.county_fips,
+        SUM(e.event_count)                                                              AS noaa_event_count,
+        SUM(e.total_fatalities)                                                         AS noaa_total_fatalities,
+        SUM(e.total_injuries)                                                           AS noaa_total_injuries,
+        SUM(CASE WHEN e.hazard_type IN ('Flood','Flash Flood','Heavy Rain')
+                 THEN e.event_count ELSE 0 END)                                        AS flood_events,
+        SUM(CASE WHEN e.hazard_type IN ('High Wind','Strong Wind','Thunderstorm Wind')
+                 THEN e.event_count ELSE 0 END)                                        AS wind_events,
+        SUM(CASE WHEN e.hazard_type IN ('Tornado','Funnel Cloud')
+                 THEN e.event_count ELSE 0 END)                                        AS tornado_events,
+        SUM(CASE WHEN e.hazard_type = 'Hail'
+                 THEN e.event_count ELSE 0 END)                                        AS hail_events,
+        SUM(CASE WHEN e.hazard_type = 'Lightning'
+                 THEN e.event_count ELSE 0 END)                                        AS lightning_events,
+        SUM(CASE WHEN e.hazard_type = 'Debris Flow'
+                 THEN e.event_count ELSE 0 END)                                        AS debris_flow_events,
+        SUM(CASE WHEN e.hazard_type = 'Wildfire'
+                 THEN e.event_count ELSE 0 END)                                        AS wildfire_events,
+        SUM(CASE WHEN e.hazard_type IN ('Excessive Heat','Heat')
+                 THEN e.event_count ELSE 0 END)                                        AS heat_events,
+        SUM(CASE WHEN e.hazard_type = 'Tropical Storm'
+                 THEN e.event_count ELSE 0 END)                                        AS tropical_events,
+        SUM(CASE WHEN e.hazard_type = 'Heavy Snow'
+                 THEN e.event_count ELSE 0 END)                                        AS winter_events
+    FROM gold_hazard.hazard_event_summary_current e
+    WHERE e.county_fips IN (SELECT county_fips FROM base)
+    GROUP BY e.county_fips
+)
+SELECT
+    b.county_fips,
+    b.county_name,
+    b.state,
+    b.population_total,
+    b.median_household_income,
+    b.median_home_value,
+    b.in_labor_force,
+    b.unemployed,
+    b.education_universe_total,
+    b.high_school_grad,
+    b.bachelors,
+    b.graduate_degree,
+    COALESCE(e.noaa_event_count, 0)        AS noaa_event_count,
+    COALESCE(e.noaa_total_fatalities, 0)   AS noaa_total_fatalities,
+    COALESCE(e.noaa_total_injuries, 0)     AS noaa_total_injuries,
+    COALESCE(e.flood_events, 0)            AS flood_events,
+    COALESCE(e.wind_events, 0)             AS wind_events,
+    COALESCE(e.tornado_events, 0)          AS tornado_events,
+    COALESCE(e.hail_events, 0)             AS hail_events,
+    COALESCE(e.lightning_events, 0)        AS lightning_events,
+    COALESCE(e.debris_flow_events, 0)      AS debris_flow_events,
+    COALESCE(e.wildfire_events, 0)         AS wildfire_events,
+    COALESCE(e.heat_events, 0)             AS heat_events,
+    COALESCE(e.tropical_events, 0)         AS tropical_events,
+    COALESCE(e.winter_events, 0)           AS winter_events,
+    CASE WHEN b.in_labor_force > 0
+         THEN b.unemployed / b.in_labor_force END               AS unemployment_rate,
+    CASE WHEN b.education_universe_total > 0
+         THEN b.bachelors / b.education_universe_total END       AS bachelors_rate,
+    CASE WHEN b.population_total > 0
+         THEN COALESCE(e.noaa_event_count, 0) / b.population_total END AS events_per_capita
+FROM base b
+LEFT JOIN events e ON b.county_fips = e.county_fips
+"""
 
     try:
         client = boto3.client("athena", region_name=region)

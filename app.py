@@ -54,14 +54,26 @@ _configure_aws()
 st.markdown(
     """
     <style>
-    /* Chat avatars — visible blue shades against the dark background */
+    /* Chat avatars — blue/teal theme; override Streamlit's default orange/red */
     [data-testid="chatAvatarIcon-user"] {
         background-color: #1E40AF !important;
         border: 2px solid #4F9CF9 !important;
+        color: #E0F2FE !important;
+    }
+    [data-testid="chatAvatarIcon-user"] svg,
+    [data-testid="chatAvatarIcon-user"] svg path {
+        fill: #E0F2FE !important;
+        color: #E0F2FE !important;
     }
     [data-testid="chatAvatarIcon-assistant"] {
         background-color: #0369A1 !important;
         border: 2px solid #38BDF8 !important;
+        color: #E0F2FE !important;
+    }
+    [data-testid="chatAvatarIcon-assistant"] svg,
+    [data-testid="chatAvatarIcon-assistant"] svg path {
+        fill: #E0F2FE !important;
+        color: #E0F2FE !important;
     }
 
     /* Sidebar secondary buttons → subtle clickable link-row style.
@@ -150,7 +162,7 @@ with st.sidebar:
         ("🔎", "Which states had the most FEMA declarations in 2020–2023?"),
         ("🔎", "Which counties had the highest tornado fatalities?"),
         ("🤖", "Predict the risk tier for Miami-Dade County, Florida"),
-        ("📈", "Show year-over-year wildfire event trends since 2015"),
+        ("📈", "Show year-over-year tornado event trends since 2010"),
         ("📚", "What is the NRI expected loss methodology?"),
     ]
     for i, (icon, ex) in enumerate(_EXAMPLES):

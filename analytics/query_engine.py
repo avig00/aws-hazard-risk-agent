@@ -273,21 +273,6 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
             f"Gold-layer hazard types: {_DB_HAZARD_TYPES}."
         )
 
-    # Pattern 1b: user asked for fatalities by hazard, but hazard_event_summary only
-    # stores event counts — per-hazard fatality breakdowns are not available.
-    if intent_template == "top_counties_by_hazard":
-        q_lower = question.lower()
-        if any(w in q_lower for w in ("fatal", "death", "deaths", "killed", "casualties", "casualt")):
-            return (
-                "DATA NOTE — relay to user: "
-                "The hazard event summary table stores event counts per county per year, "
-                "but does not include per-hazard fatality breakdowns. "
-                "The results show total_events (number of recorded events per county), "
-                "which is the best available proxy for hazard exposure. "
-                "All-hazard fatality totals are available in risk_feature_mart but "
-                "cannot be broken down by individual hazard type."
-            )
-
     # Pattern 2: any template where all NOAA event/damage columns are zero.
     present_cols = [c for c in _NOAA_METRIC_COLS if c in results[0]]
     if present_cols:

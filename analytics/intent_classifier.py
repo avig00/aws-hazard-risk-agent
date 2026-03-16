@@ -226,7 +226,6 @@ def classify_intent(question: str, default_limit: int = 10) -> QueryIntent:
         hazard_col = _HAZARD_TYPE_TO_FEATURE_COL.get(params["hazard_type"])
         if hazard_col:
             matched_template = "hazard_trend_by_feature"
-            params["hazard_col"] = hazard_col
         else:
             matched_template = "hazard_trend_specific"
 
