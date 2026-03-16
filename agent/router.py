@@ -72,11 +72,17 @@ def route(question: str) -> RoutingDecision:
         re.search(r"\b\d{5}\b", question)
         or re.search(r"[A-Z][A-Za-z\-]*(?:\s+[A-Za-z][A-Za-z\-]*)?\s+[Cc]ounty", question)
     )
-    if wants_predict and wants_query and county_referenced:
+    if wants_predict and wants_query:
+        if county_referenced:
+            return RoutingDecision(
+                tools=["predict", "query"],
+                reasoning="Question requests ML risk scores combined with structured analytics",
+                is_hybrid=True,
+            )
+        # No county named — ML endpoint cannot run; treat as query-only
         return RoutingDecision(
-            tools=["predict", "query"],
-            reasoning="Question requests ML risk scores combined with structured analytics",
-            is_hybrid=True,
+            tools=["query"],
+            reasoning="Predict signal present but no county identified; routing to analytics only",
         )
 
     # Hybrid: structured result + explanation
