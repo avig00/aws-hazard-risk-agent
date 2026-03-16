@@ -90,6 +90,26 @@ def _extract_limit(question: str, default: int = 10) -> int:
 # Funnel Cloud, High Wind, Excessive Heat, Thunderstorm Wind, Flash Flood, Flood,
 # Debris Flow, Dust Devil, Heat, Dust Storm, Dense Fog, Hail, Lightning,
 # Strong Wind, Wildfire
+# Maps canonical Gold-layer hazard_type → the dedicated event-count column in
+# risk_feature_mart_current.  Used to route trend queries to the full-history table
+# (2010–2023) instead of hazard_event_summary_current (limited recent coverage).
+_HAZARD_TYPE_TO_FEATURE_COL: dict[str, str] = {
+    "Wildfire":         "wildfire_events",
+    "Tornado":          "tornado_events",
+    "Flood":            "flood_events",
+    "Flash Flood":      "flood_events",
+    "Hail":             "hail_events",
+    "Lightning":        "lightning_events",
+    "High Wind":        "wind_events",
+    "Strong Wind":      "wind_events",
+    "Thunderstorm Wind":"wind_events",
+    "Tropical Storm":   "tropical_events",
+    "Heavy Snow":       "winter_events",
+    "Excessive Heat":   "heat_events",
+    "Heat":             "heat_events",
+    "Debris Flow":      "debris_flow_events",
+}
+
 _HAZARD_SYNONYMS: dict[str, str] = {
     "hurricane":        "Tropical Storm",
     "tropical storm":   "Tropical Storm",
@@ -192,10 +212,22 @@ def classify_intent(question: str, default_limit: int = 10) -> QueryIntent:
     if matched_template == "largest_increase" and params.get("hazard_type", "all") != "all":
         matched_template = "hazard_event_increase"
 
-    # Route hazard-specific trend queries to hazard_event_summary_current.
-    # risk_feature_mart only stores all-hazard aggregates, so a wildfire-specific trend
-    # would return 0 events — route to the per-hazard table instead.
+    # Route hazard-specific top-N queries (e.g. "highest tornado events by county")
+    # to hazard_event_summary rather than NRI scores in risk_feature_mart.
+    if matched_template == "top_counties_by_risk" and params.get("hazard_type", "all") != "all":
+        matched_template = "top_counties_by_hazard"
+
+    # Route hazard-specific trend queries.
+    # Prefer hazard_trend_by_feature (uses risk_feature_mart_current dedicated columns,
+    # full 2010–2023 history) when the hazard maps to a known feature column.
+    # Fall back to hazard_trend_specific (hazard_event_summary_current) only for hazard
+    # types without a dedicated column — coverage may be limited in that table.
     if matched_template == "hazard_trend_by_year" and params.get("hazard_type", "all") != "all":
-        matched_template = "hazard_trend_specific"
+        hazard_col = _HAZARD_TYPE_TO_FEATURE_COL.get(params["hazard_type"])
+        if hazard_col:
+            matched_template = "hazard_trend_by_feature"
+            params["hazard_col"] = hazard_col
+        else:
+            matched_template = "hazard_trend_specific"
 
     return QueryIntent(template=matched_template, params=params, confidence=0.9)

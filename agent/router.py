@@ -22,6 +22,9 @@ _PREDICT_SIGNALS = [
     # Verb "predict" followed by any risk/tier mention within 20 chars
     r"\bpredict\b.{0,20}\b(risk|tier)",
     r"risk\s+tier",
+    r"risk\s+level",
+    # "what is the risk for X County" — county-specific risk lookup
+    r"\brisk\b.{0,40}\bcounty\b",
 ]
 _QUERY_SIGNALS = [
     r"\btop\b", r"\bhighest\b", r"\blowest\b", r"\btrend\b",

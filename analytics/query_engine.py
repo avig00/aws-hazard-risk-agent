@@ -29,6 +29,14 @@ TEMPLATE_DIR = Path(__file__).parent / "sql_templates"
 ALLOWED_DATABASE = "gold_hazard"
 MAX_SCAN_BYTES = 100 * 1024 * 1024  # 100 MB
 MAX_LIMIT = 100
+
+# Whitelist of per-hazard feature columns in risk_feature_mart_current.
+# Used by hazard_trend_by_feature.sql to avoid injecting arbitrary column names.
+ALLOWED_HAZARD_FEATURE_COLS = {
+    "wildfire_events", "tornado_events", "flood_events", "hail_events",
+    "lightning_events", "wind_events", "tropical_events", "winter_events",
+    "heat_events", "debris_flow_events",
+}
 MIN_YEAR = 2000
 MAX_YEAR = 2025
 
@@ -76,6 +84,12 @@ def _sanitize_params(params: dict) -> dict:
             if not re.match(fips_pattern, val):
                 raise ValueError(f"Invalid county_fips_list format: {value}")
             clean[key] = val
+
+        elif key == "hazard_col":
+            # Must be an exact match against the whitelist — injected as a column name, not a value
+            if value not in ALLOWED_HAZARD_FEATURE_COLS:
+                raise ValueError(f"Unknown hazard_col '{value}'. Allowed: {sorted(ALLOWED_HAZARD_FEATURE_COLS)}")
+            clean[key] = value
 
         else:
             # Generic string: strip any SQL-dangerous characters
@@ -242,7 +256,7 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
     # metrics across ALL hazard types.  Skip this note when the intent routed to
     # hazard_event_increase, which queries hazard_event_summary with a hazard_type filter
     # and therefore DOES return hazard-specific results.
-    if db_hazard and intent_template not in ("hazard_event_increase", "fema_declarations_by_state", "hazard_trend_specific"):
+    if db_hazard and intent_template not in ("hazard_event_increase", "fema_declarations_by_state", "hazard_trend_specific", "hazard_trend_by_feature", "top_counties_by_hazard"):
         return (
             f"DATA LIMITATION — must tell the user: "
             f"The user asked about '{user_term}' (Gold-layer canonical term: "
@@ -258,6 +272,21 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
             f"but are not surfaced in this query. "
             f"Gold-layer hazard types: {_DB_HAZARD_TYPES}."
         )
+
+    # Pattern 1b: user asked for fatalities by hazard, but hazard_event_summary only
+    # stores event counts — per-hazard fatality breakdowns are not available.
+    if intent_template == "top_counties_by_hazard":
+        q_lower = question.lower()
+        if any(w in q_lower for w in ("fatal", "death", "deaths", "killed", "casualties", "casualt")):
+            return (
+                "DATA NOTE — relay to user: "
+                "The hazard event summary table stores event counts per county per year, "
+                "but does not include per-hazard fatality breakdowns. "
+                "The results show total_events (number of recorded events per county), "
+                "which is the best available proxy for hazard exposure. "
+                "All-hazard fatality totals are available in risk_feature_mart but "
+                "cannot be broken down by individual hazard type."
+            )
 
     # Pattern 2: any template where all NOAA event/damage columns are zero.
     present_cols = [c for c in _NOAA_METRIC_COLS if c in results[0]]

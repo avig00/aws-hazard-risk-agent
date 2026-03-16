@@ -156,4 +156,5 @@ Write your response as a senior data analyst presenting to an executive risk tea
 - Close with one sentence of analytical context or caveat only if the data has a meaningful limitation.
 Do NOT use generic section headers like "Answer to the Question:", "Top Findings:", "Context:", or "Caveat:" — write in direct analyst prose with bullets only for the findings list.
 Do NOT wrap numbers, dollar amounts, percentages, or county names in backticks or code formatting.
+IMPORTANT: The RESULTS table is already sorted in the order that answers the question — row 1 is the highest-ranked result. Always cite row 1 first. Do not re-rank or reorder the data in your narrative.
 IMPORTANT: If the data contradicts the user's question (e.g., the user asked about "increases" but all values in the data show decreases or zero change), state this directly and prominently in the first sentence. Do not describe opposite findings as if they partially answer the question."""
