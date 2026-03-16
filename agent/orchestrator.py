@@ -10,6 +10,15 @@ import os
 import re
 import time
 
+
+class _AmbiguousCountyError(Exception):
+    """Raised when a county name matches multiple states and no state was specified."""
+    def __init__(self, county_name: str, states: list):
+        self.county_name = county_name
+        self.states = states
+        super().__init__(f"Ambiguous county '{county_name}': found in {states}")
+
+
 import boto3
 
 from agent.router import RoutingDecision, route
@@ -59,8 +68,11 @@ def _extract_state_hint(question: str) -> str:
     for name, abbr in sorted(_STATE_NAME_TO_ABBR.items(), key=lambda x: -len(x[0])):
         if re.search(r"\b" + re.escape(name) + r"\b", q_lower):
             return name.title()
-    # 2-letter abbreviation after comma or "in " → convert to full name
-    m = re.search(r"(?:,\s*|\bin\s+)([A-Z]{2})\b", question)
+    # 2-letter abbreviation in common formats → convert to full name:
+    #   "Harris County, TX"  — after comma
+    #   "Harris County in TX" — after "in"
+    #   "Harrison County MO"  — directly after County with a space (no comma)
+    m = re.search(r"(?:,\s*|\bin\s+|[Cc]ounty\s+)([A-Z]{2})\b", question)
     if m and m.group(1) in _STATE_ABBRS:
         return _ABBR_TO_STATE_NAME[m.group(1)]
     return ""
@@ -80,6 +92,60 @@ def _extract_county_name(question: str):
     if m:
         return m.group(1).strip()
     return None
+
+
+def _check_county_ambiguity(
+    county_name: str,
+    region: str = "us-east-1",
+    s3_output: str = None,
+) -> list:
+    """
+    Query county_dim for all states that have a county matching county_name (exact).
+    Returns a sorted list of state names (e.g. ['Kentucky', 'Missouri', 'Ohio']).
+    Returns [] on error or if no match found.
+
+    Used to detect ambiguous county names (e.g. 'Harrison' exists in many states)
+    so the agent can ask for clarification instead of guessing.
+    """
+    if s3_output is None:
+        s3_output = os.environ.get(
+            "ATHENA_OUTPUT_LOCATION",
+            "s3://aws-hazard-risk-vigamogh-dev/hazard/athena-results/",
+        )
+
+    safe_name = re.sub(r"[^a-zA-Z \-]", "", county_name)[:40].strip().lower()
+    if not safe_name:
+        return []
+
+    sql = f"""
+SELECT DISTINCT d.state
+FROM gold_hazard.county_dim d
+WHERE LOWER(d.county_name) = '{safe_name}'
+ORDER BY d.state
+LIMIT 20
+"""
+    try:
+        client = boto3.client("athena", region_name=region)
+        resp = client.start_query_execution(
+            QueryString=sql,
+            QueryExecutionContext={"Database": "gold_hazard"},
+            ResultConfiguration={"OutputLocation": s3_output},
+        )
+        exec_id = resp["QueryExecutionId"]
+        for _ in range(30):
+            status = client.get_query_execution(QueryExecutionId=exec_id)
+            state = status["QueryExecution"]["Status"]["State"]
+            if state in ("SUCCEEDED", "FAILED", "CANCELLED"):
+                break
+            time.sleep(2)
+        if state != "SUCCEEDED":
+            return []
+        result = client.get_query_results(QueryExecutionId=exec_id)
+        rows = result["ResultSet"]["Rows"][1:]  # skip header
+        return sorted(r["Data"][0].get("VarCharValue", "") for r in rows if r["Data"])
+    except Exception as exc:
+        logger.warning("County ambiguity check failed: %s", exc)
+        return []
 
 
 def _fetch_county_features(
@@ -322,11 +388,28 @@ def run_agent(
             county_name = ""
             county_fips = ""
             county_id = _extract_county_name(question)
-            if county_id:
+            if county_id and not re.match(r"^\d{5}$", county_id):
+                # Name-based lookup — check for state context first.
                 state_hint = _extract_state_hint(question)
+                if not state_hint:
+                    # No state specified: check if this name exists in multiple states.
+                    # If so, return a clarification request instead of guessing.
+                    possible_states = _check_county_ambiguity(county_id)
+                    if len(possible_states) > 1:
+                        tool_outputs["predict"] = {
+                            "_ambiguous": True,
+                            "_county_name": county_id,
+                            "_possible_states": possible_states,
+                        }
+                        # Skip the SageMaker call entirely
+                        raise _AmbiguousCountyError(county_id, possible_states)
                 features, county_name, county_fips = _fetch_county_features(
                     county_id, state_hint=state_hint
                 )
+            elif county_id:
+                # FIPS path — unambiguous, no state hint needed
+                features, county_name, county_fips = _fetch_county_features(county_id)
+
             pred = predict_risk(features=features, endpoint_name=sagemaker_endpoint)
             pred["county_name"] = county_name
             pred["county_fips"] = county_fips
@@ -334,6 +417,8 @@ def run_agent(
             if not county_id:
                 pred["_no_county"] = True
             tool_outputs["predict"] = pred
+        except _AmbiguousCountyError:
+            pass  # tool_outputs["predict"] already set with _ambiguous flag above
         except Exception as exc:
             logger.warning("Predict tool failed: %s", exc)
             tool_outputs["predict"] = {"error": str(exc)}
@@ -465,7 +550,18 @@ def run_agent(
     elif "predict" in decision.tools and "query" not in decision.tools and "ask" not in decision.tools:
         # Pure predict route
         pred_out = tool_outputs.get("predict", {})
-        if "error" in pred_out:
+        if pred_out.get("_ambiguous"):
+            county = pred_out.get("_county_name", "that county")
+            states = pred_out.get("_possible_states", [])
+            states_list = ", ".join(states)
+            example_state = states[0] if states else "TX"
+            result["answer"] = (
+                f"There are multiple counties named **{county}** across different states: "
+                f"{states_list}.\n\n"
+                f"Please specify the state so I can predict the correct county's risk tier. "
+                f"Example: *What is the predicted risk for {county} County, {example_state}?*"
+            )
+        elif "error" in pred_out:
             result["answer"] = f"Prediction error: {pred_out['error']}"
         elif pred_out.get("_no_county"):
             result["answer"] = (

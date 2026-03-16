@@ -154,6 +154,32 @@ _HAZARD_SYNONYMS: dict[str, str] = {
 }
 
 
+_US_STATE_NAMES = {
+    "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
+    "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
+    "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana",
+    "maine", "maryland", "massachusetts", "michigan", "minnesota", "mississippi",
+    "missouri", "montana", "nebraska", "nevada", "new hampshire", "new jersey",
+    "new mexico", "new york", "north carolina", "north dakota", "ohio", "oklahoma",
+    "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota",
+    "tennessee", "texas", "utah", "vermont", "virginia", "washington",
+    "west virginia", "wisconsin", "wyoming",
+}
+
+
+def _extract_state_name(question: str) -> str:
+    """
+    Extract a U.S. state name from the question (lowercase, as stored in county_dim).
+    Checks multi-word names first (e.g. 'west virginia' before 'virginia').
+    Returns '' if no state found.
+    """
+    q = question.lower()
+    for name in sorted(_US_STATE_NAMES, key=len, reverse=True):
+        if re.search(r"\b" + re.escape(name) + r"\b", q):
+            return name
+    return ""
+
+
 def _extract_hazard_type(question: str) -> str:
     """
     Extract a specific hazard type from the question and normalize it to the
@@ -245,5 +271,18 @@ def classify_intent(question: str, default_limit: int = 10) -> QueryIntent:
             matched_template = "hazard_trend_by_feature"
         else:
             matched_template = "hazard_trend_specific"
+
+    # Route state-scoped ranking queries to top_counties_in_state when the question
+    # references "other [state] counties" or "counties in [state]".
+    # Triggers on top_counties_by_risk only — not on hazard-specific or trend templates.
+    if matched_template == "top_counties_by_risk":
+        state_name = _extract_state_name(question)
+        if state_name and re.search(
+            r"(other\s+\w+\s+count|count\w*\s+in\s+\w+|in\s+\w+\s+state|"
+            r"compare.*\w+\s+count|\w+\s+count.*compare)",
+            q,
+        ):
+            matched_template = "top_counties_in_state"
+            params["state_name"] = state_name
 
     return QueryIntent(template=matched_template, params=params, confidence=0.9)

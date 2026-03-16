@@ -100,6 +100,13 @@ def _sanitize_params(params: dict) -> dict:
                 raise ValueError(f"Invalid order_col '{value}'. Allowed: {sorted(allowed_order_cols)}")
             clean[key] = value
 
+        elif key == "state_name":
+            # Full state name injected into top_counties_in_state WHERE clause.
+            # Allow only letters and spaces (e.g. "Texas", "New Mexico") — stored lowercase.
+            if not re.match(r"^[a-zA-Z ]+$", str(value)):
+                raise ValueError(f"Invalid state_name: {value}")
+            clean[key] = str(value).lower().strip()
+
         else:
             # Generic string: strip any SQL-dangerous characters
             clean[key] = re.sub(r"[;'\"\-\-]", "", str(value))
