@@ -18,7 +18,9 @@ import time
 import boto3
 import yaml
 
-from analytics.intent_classifier import QueryIntent, classify_intent
+from analytics.intent_classifier import (
+    QueryIntent, classify_intent, DEFAULT_START_YEAR, DEFAULT_END_YEAR,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -273,6 +275,24 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
     3. Wildfire query against hazard_event_summary — NOAA systematically underreports fires.
     4. User asked about "risk/vulnerability" for a hazard, results show event counts only.
     """
+    # Pattern 0: user requested years outside the data coverage window.
+    # _extract_years() only matches 20xx, so historical years (e.g. 1800, 1900) are
+    # silently ignored and the query runs on the default range.  Detect any 4-digit
+    # year in the question and warn the LLM before it presents results as if they
+    # answer a historical query.
+    requested_years = [int(y) for y in re.findall(r"\b([12][0-9]{3})\b", question)]
+    out_of_range = [y for y in requested_years if y < DEFAULT_START_YEAR or y > DEFAULT_END_YEAR]
+    if out_of_range:
+        return (
+            f"DATA LIMITATION — you MUST open your response with this: "
+            f"The user requested data for {sorted(set(out_of_range))}, but the Gold-layer "
+            f"dataset only covers {DEFAULT_START_YEAR}–{DEFAULT_END_YEAR}. "
+            f"The results shown are for {DEFAULT_START_YEAR}–{DEFAULT_END_YEAR} — they do "
+            f"NOT reflect the user's requested time period. "
+            f"State this clearly in your first sentence, then present the available data as "
+            f"context only (do not describe it as answering the original question)."
+        )
+
     if not results:
         return ""
 
