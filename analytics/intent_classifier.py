@@ -215,24 +215,22 @@ def classify_intent(question: str, default_limit: int = 10) -> QueryIntent:
     if matched_template == "largest_increase" and params.get("hazard_type", "all") != "all":
         matched_template = "hazard_event_increase"
 
-    # Route hazard-specific top-N queries (e.g. "highest tornado events by county")
-    # to hazard_event_summary rather than NRI scores in risk_feature_mart.
-    # EXCEPTION: questions using risk/vulnerability vocabulary stay on top_counties_by_risk
-    # so the all-hazard data limitation note fires — "most at risk from X" and
-    # "most vulnerable to X" are best answered with NRI composite scores + caveat,
-    # not raw event counts which don't capture exposure, vulnerability, or resilience.
-    _RISK_VOCAB = ("at risk", "vulnerable", "vulnerability", "risk level", "risk score")
+    # Route hazard-specific top-N queries (e.g. "highest tornado events by county",
+    # "most at risk from tornadoes", "most vulnerable to hurricanes") to
+    # hazard_event_summary rather than NRI scores in risk_feature_mart.
+    # NRI composite scores are all-hazard aggregates and do not reflect the named
+    # hazard's specific frequency — event counts from hazard_event_summary are
+    # always a better answer when the user names a specific hazard.
     if matched_template == "top_counties_by_risk" and params.get("hazard_type", "all") != "all":
-        if not any(phrase in q for phrase in _RISK_VOCAB):
-            matched_template = "top_counties_by_hazard"
-            # Choose sort column based on what the question is asking for
-            q_lower = question.lower()
-            if any(w in q_lower for w in ("fatal", "death", "deaths", "killed", "casualties")):
-                params["order_col"] = "total_fatalities"
-            elif any(w in q_lower for w in ("injur", "hurt", "wounded")):
-                params["order_col"] = "total_injuries"
-            else:
-                params["order_col"] = "total_events"
+        matched_template = "top_counties_by_hazard"
+        # Choose sort column based on what the question is asking for
+        q_lower = question.lower()
+        if any(w in q_lower for w in ("fatal", "death", "deaths", "killed", "casualties")):
+            params["order_col"] = "total_fatalities"
+        elif any(w in q_lower for w in ("injur", "hurt", "wounded")):
+            params["order_col"] = "total_injuries"
+        else:
+            params["order_col"] = "total_events"
 
     # Route hazard-specific trend queries.
     # Prefer hazard_trend_by_feature (uses risk_feature_mart_current dedicated columns,

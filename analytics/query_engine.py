@@ -267,10 +267,11 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
     Detect known Gold-layer data limitation patterns and return a plain-English
     note for the LLM to relay to the user.  Returns "" when no issue detected.
 
-    Two patterns detected:
-    1. User asked about a specific hazard, but risk_feature_mart stores only
-       all-hazard aggregates — per-hazard NOAA event data will be all zeros.
-    2. Any query where all NOAA event/damage columns are zero across all rows.
+    Patterns detected:
+    1. User named a hazard but query runs against risk_feature_mart (all-hazard NRI/FEMA).
+    2. All NOAA event/damage columns are zero across all rows.
+    3. Wildfire query against hazard_event_summary — NOAA systematically underreports fires.
+    4. User asked about "risk/vulnerability" for a hazard, results show event counts only.
     """
     if not results:
         return ""
@@ -328,6 +329,27 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
             "incidents, NOT total wildfire destruction or acreage. Treat these rankings as "
             "a lower-bound indicator only, and recommend the user consult NIFC or CAL FIRE "
             "data for a complete wildfire picture."
+        )
+
+    # Pattern 4: user asked about "risk" or "vulnerability" for a specific hazard,
+    # but the results show event counts (top_counties_by_hazard).
+    # Event frequency is a useful proxy, but it is NOT the same as composite risk —
+    # it doesn't capture community exposure, social vulnerability, or resilience.
+    _RISK_VOCAB = ("at risk", "vulnerable", "vulnerability", "risk level", "risk score")
+    if (
+        db_hazard
+        and intent_template == "top_counties_by_hazard"
+        and any(phrase in q_lower for phrase in _RISK_VOCAB)
+    ):
+        return (
+            f"CONTEXT NOTE — tell the user: "
+            f"The user asked about '{user_term}' risk or vulnerability. These results show "
+            f"NOAA Storm Event counts for '{db_hazard}' — counties ranked by how often this "
+            f"hazard has occurred. Event frequency is a useful indicator of hazard exposure, "
+            f"but composite risk also depends on community social vulnerability, built "
+            f"environment exposure, and resilience capacity (all captured in the NRI). "
+            f"Explain this distinction briefly, then present the event-count rankings as the "
+            f"best available hazard-specific data."
         )
 
     # Pattern 2: any template where all NOAA event/damage columns are zero.
