@@ -1,0 +1,78 @@
+model:
+  type: xgboost_classifier
+  max_depth: 4
+  learning_rate: 0.05
+  n_estimators: 800
+  objective: multi:softmax
+  num_class: 3
+  subsample: 0.8
+  colsample_bytree: 0.6
+  min_child_weight: 6
+  reg_alpha: 0.15
+  reg_lambda: 1.5
+  early_stopping_rounds: 50
+  eval_metric: mlogloss
+  random_state: 42
+
+data:
+  # Target: county risk tier (LOW / MEDIUM / HIGH) derived from cumulative FEMA damage tertiles.
+  # Story: "Given a county's storm event frequency, demographic vulnerability, and geography,
+  #         classify its disaster risk tier."
+  # Dollar damage features excluded: using same-period NOAA damage co-variates to predict
+  # FEMA damage tiers is circular — both measure severity of the same physical events.
+  target_column: risk_bucket
+  train_ratio: 0.8
+  stratify_column: risk_bucket
+  output_dir: s3://aws-hazard-risk-vigamogh-dev/hazard/ml/features/
+  database: gold_hazard
+  table: risk_feature_mart
+
+features:
+  # Features: storm event counts + non-dollar severity + demographics + geography.
+  # Dollar damage totals (noaa_*_damage, *_total_damage) excluded — predicting FEMA damage
+  # tiers using same-period NOAA damage co-variates is circular: both quantities measure
+  # the severity of the same physical events over the same historical window.
+  numeric:
+    # NOAA aggregate event frequency and non-dollar severity
+    - noaa_event_count
+    - noaa_total_fatalities
+    - noaa_total_injuries
+    # Per-hazard-type event counts (frequency signal only — no dollar damage)
+    - flood_events
+    - wind_events
+    - tornado_events
+    - hail_events
+    - lightning_events
+    - debris_flow_events
+    - wildfire_events
+    - heat_events
+    - tropical_events
+    - winter_events
+    # Socioeconomic/demographic
+    - population_total
+    - median_household_income
+    - median_home_value
+    - in_labor_force
+    - unemployed
+    - high_school_grad
+    - bachelors
+    - graduate_degree
+    # Derived ratios
+    - unemployment_rate
+    - bachelors_rate
+    - events_per_capita
+    # NRI scores intentionally excluded: they are computed by FEMA from historical
+    # FEMA damage data — the same source as the risk_bucket target — which creates
+    # circular reasoning.  CV balanced accuracy is higher without them (71.0 ± 1.1%
+    # vs 70.8 ± 2.0%) confirming better generalisation without leakage.
+  lag_features: []
+  log_transform:
+    - median_household_income
+    # NOTE: fema_total_damage is the target — log1p applied in train_model.py
+  categorical:
+    - state   # ~51 values (50 states + DC) — one-hot encoded
+
+mlflow:
+  experiment_name: hazard-risk-xgboost
+  tracking_uri: sqlite:///mlflow.db
+  artifact_location: s3://aws-hazard-risk-vigamogh-dev/hazard/ml/artifacts/

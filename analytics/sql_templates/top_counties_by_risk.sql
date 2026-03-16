@@ -8,7 +8,7 @@ SELECT
     ROUND(AVG(r.nri_sovi_score), 4)     AS avg_vulnerability,
     ROUND(AVG(r.nri_resl_score), 4)     AS avg_resilience,
     COUNT(*)                            AS years_on_record
-FROM gold_hazard.risk_feature_mart r
+FROM gold_hazard.risk_feature_mart_current r
 JOIN gold_hazard.county_dim d ON r.county_fips = d.county_fips
 WHERE r.year BETWEEN {start_year} AND {end_year}
 GROUP BY r.county_fips, d.county_name, d.state

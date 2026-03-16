@@ -54,7 +54,7 @@ coverage.xml
 # AWS credential files (never commit keys)
 .aws/
 credentials
-config
+# Note: do NOT add bare 'config' here — it would ignore the project's config/ directory
 
 # SageMaker generated artifacts
 **/model.tar.gz

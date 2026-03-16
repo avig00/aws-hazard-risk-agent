@@ -5,7 +5,7 @@ WITH period_a AS (
         d.county_name,
         d.state,
         AVG(r.noaa_event_count) AS avg_events_a
-    FROM gold_hazard.risk_feature_mart r
+    FROM gold_hazard.risk_feature_mart_current r
     JOIN gold_hazard.county_dim d ON r.county_fips = d.county_fips
     WHERE r.year BETWEEN {period_a_start} AND {period_a_end}
     GROUP BY r.county_fips, d.county_name, d.state
@@ -14,7 +14,7 @@ period_b AS (
     SELECT
         county_fips,
         AVG(noaa_event_count) AS avg_events_b
-    FROM gold_hazard.risk_feature_mart
+    FROM gold_hazard.risk_feature_mart_current
     WHERE year BETWEEN {period_b_start} AND {period_b_end}
     GROUP BY county_fips
 )

@@ -1,0 +1,26 @@
+rag:
+  embedding_model: "amazon.titan-embed-text-v1"
+  embedding_dimensions: 1536
+  vector_index: "hazard-index"
+  chunk_size: 512
+  chunk_overlap: 64
+  top_k: 5
+  min_score: 0.4
+  region: "us-east-1"
+
+pinecone:
+  api_key: ""        # Set via env var PINECONE_API_KEY or Streamlit secrets
+  index_name: "hazard-risk-docs"
+
+llm:
+  model_id: "us.amazon.nova-lite-v1:0"
+  max_tokens: 1024
+  temperature: 0.1
+
+corpus:
+  s3_bucket: "aws-hazard-risk-vigamogh-dev"
+  s3_prefix: "hazard/docs/"
+  supported_extensions:
+    - ".pdf"
+    - ".txt"
+    - ".md"
