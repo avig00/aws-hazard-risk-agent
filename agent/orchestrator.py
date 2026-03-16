@@ -41,22 +41,28 @@ _STATE_NAME_TO_ABBR = {
 _STATE_ABBRS = {v for v in _STATE_NAME_TO_ABBR.values()}
 
 
+_ABBR_TO_STATE_NAME = {abbr: name.title() for name, abbr in _STATE_NAME_TO_ABBR.items()}
+
+
 def _extract_state_hint(question: str) -> str:
     """
-    Extract a U.S. state abbreviation from the question.
-    Matches full state names ('Texas') and two-letter abbreviations when
-    they appear after a comma or the word 'in' (e.g. 'Harris County, TX').
-    Returns a 2-letter abbreviation, or '' if none found.
+    Extract the full U.S. state name as stored in county_dim (e.g. 'Texas', 'Florida').
+    county_dim stores full state names — NOT 2-letter abbreviations — because the ML model
+    was trained with features like state_Texas, state_California (pd.get_dummies output).
+
+    Matches full state names in the question ('Texas') and 2-letter abbreviations when
+    they appear after a comma or 'in' (e.g. 'Harris County, TX' → 'Texas').
+    Returns a title-case full state name, or '' if none found.
     """
     q_lower = question.lower()
-    # Full state name
+    # Full state name (longest match first to avoid 'new' matching 'new jersey' prefix)
     for name, abbr in sorted(_STATE_NAME_TO_ABBR.items(), key=lambda x: -len(x[0])):
         if re.search(r"\b" + re.escape(name) + r"\b", q_lower):
-            return abbr
-    # Two-letter abbreviation after comma or "in " (e.g. "Harris County, TX")
+            return name.title()
+    # 2-letter abbreviation after comma or "in " → convert to full name
     m = re.search(r"(?:,\s*|\bin\s+)([A-Z]{2})\b", question)
     if m and m.group(1) in _STATE_ABBRS:
-        return m.group(1)
+        return _ABBR_TO_STATE_NAME[m.group(1)]
     return ""
 
 
@@ -102,6 +108,10 @@ def _fetch_county_features(
             "s3://aws-hazard-risk-vigamogh-dev/hazard/athena-results/",
         )
 
+    # safe_lower/safe_spaces used both in the name-based filter and in ORDER BY
+    safe_lower = ""
+    safe_spaces = ""
+
     if re.match(r"^\d{5}$", county_identifier):
         county_filter = f"r.county_fips = '{county_identifier}'"
     else:
@@ -118,9 +128,11 @@ def _fetch_county_features(
             f"LOWER(d.county_name) LIKE '{safe_spaces}%')"
         )
         # Narrow by state when the question provides a clear state reference.
-        # Prevents ambiguous names (e.g. "Harris" → Harrison MO) when state context exists.
-        if state_hint and re.match(r"^[A-Z]{2}$", state_hint):
-            county_filter += f" AND UPPER(d.state) = '{state_hint}'"
+        # county_dim stores full state names ("Texas", not "TX") — use LOWER() comparison.
+        # Prevents ambiguous names (e.g. "Harris" → Harrison TX) when state context exists.
+        if state_hint:
+            safe_state = re.sub(r"[^a-zA-Z ]", "", state_hint).strip()
+            county_filter += f" AND LOWER(d.state) = '{safe_state.lower()}'"
 
     sql = f"""
 WITH base AS (
@@ -141,6 +153,10 @@ WITH base AS (
     JOIN gold_hazard.county_dim d ON r.county_fips = d.county_fips
     WHERE {county_filter}
     GROUP BY r.county_fips, d.county_name, d.state
+    ORDER BY CASE WHEN '{safe_lower}' = '' THEN 0
+                  WHEN LOWER(d.county_name) = '{safe_lower}' THEN 0
+                  WHEN LOWER(d.county_name) = '{safe_spaces}' THEN 1
+                  ELSE 2 END ASC
     LIMIT 1
 ),
 events AS (
@@ -392,22 +408,40 @@ def run_agent(
                 c.get("text", "") for c in rag_chunks[:3] if c.get("text", "").strip()
             )
 
+            # Detect whether the question names a specific county — if so, the LLM
+            # should open with that county's data point, not blindly with Row 1.
+            # "Row 1 first" only applies to open-ended ranking questions.
+            named_county = _extract_county_name(question)
+            if named_county:
+                opening_rule = (
+                    f"- The question asks about a specific county ('{named_county}'). "
+                    f"Open your first sentence with that county's score and its rank within "
+                    f"the results (e.g. 'ranks Nth nationally'). Do NOT call it the "
+                    f"'highest-ranked' unless it genuinely has the highest score in the table."
+                )
+            else:
+                opening_rule = (
+                    "- Open with the top-ranked county (Row 1 of the DATA ANSWER) and its "
+                    "specific score or metric. Do NOT lead with a lower-ranked county."
+                )
+
             hybrid_system = (
                 "You are a senior hazard risk analyst combining structured data findings "
                 "with document-grounded context.\n\n"
                 "Rules:\n"
-                "- Open with 1–2 sentences citing the specific county names and figures "
-                "from the DATA ANSWER. The top-ranked county MUST be named in your first sentence.\n"
+                f"{opening_rule}\n"
                 "- Follow with 1–2 sentences of contextual explanation using the DOCUMENT CONTEXT.\n"
                 "- Do NOT re-state or paraphrase the full data table — you are writing a verbal "
                 "complement to the table already shown to the user, not a substitute for it.\n"
                 "- Do NOT use section headers like 'Data Answer:' or 'Document Context:'.\n"
+                "- NEVER describe a lower score as higher than a higher score. "
+                "If county A has score 100.0 and county B has 99.93, county A ranks higher.\n"
                 "- If no document context was retrieved, answer using only the data findings."
             )
 
             hybrid_user = (
                 f"QUESTION: {question}\n\n"
-                f"DATA ANSWER (cite these specific values — lead with the top result):\n"
+                f"DATA ANSWER (cite these specific values):\n"
                 f"{tag_answer}\n\n"
                 f"DOCUMENT CONTEXT (use for explanation only):\n"
                 f"{rag_text or 'No documents retrieved.'}"
