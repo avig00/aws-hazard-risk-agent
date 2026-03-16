@@ -63,8 +63,16 @@ def route(question: str) -> RoutingDecision:
     wants_query = _matches(question, _QUERY_SIGNALS)
     wants_ask = _matches(question, _ASK_SIGNALS)
 
-    # Hybrid: explicitly asks for both structured data AND model prediction
-    if wants_predict and wants_query:
+    # Hybrid: explicitly asks for both structured data AND model prediction.
+    # Require a county reference — without one the ML endpoint cannot run (it needs
+    # a single county's feature vector).  "Predicted risk" in a list/ranking question
+    # ("top 10 counties by predicted risk") refers to NRI scores, not the ML endpoint;
+    # those questions are better served by query-only.
+    county_referenced = bool(
+        re.search(r"\b\d{5}\b", question)
+        or re.search(r"[A-Z][A-Za-z\-]*(?:\s+[A-Za-z][A-Za-z\-]*)?\s+[Cc]ounty", question)
+    )
+    if wants_predict and wants_query and county_referenced:
         return RoutingDecision(
             tools=["predict", "query"],
             reasoning="Question requests ML risk scores combined with structured analytics",
