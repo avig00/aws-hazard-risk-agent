@@ -54,26 +54,40 @@ _configure_aws()
 st.markdown(
     """
     <style>
-    /* Chat avatars — blue/teal theme; override Streamlit's default orange/red */
-    [data-testid="chatAvatarIcon-user"] {
+    /* Chat avatars — blue/teal theme; override Streamlit's default orange/red.
+       Target both the legacy data-testid and the newer stChatMessageAvatarUser/Assistant
+       selectors used in recent Streamlit versions. */
+
+    /* User avatar — dark navy background, sky-blue border + icon */
+    [data-testid="chatAvatarIcon-user"],
+    [data-testid="stChatMessageAvatarUser"] {
         background-color: #1E40AF !important;
         border: 2px solid #4F9CF9 !important;
         color: #E0F2FE !important;
     }
     [data-testid="chatAvatarIcon-user"] svg,
-    [data-testid="chatAvatarIcon-user"] svg path {
+    [data-testid="chatAvatarIcon-user"] svg path,
+    [data-testid="stChatMessageAvatarUser"] svg,
+    [data-testid="stChatMessageAvatarUser"] svg path {
         fill: #E0F2FE !important;
         color: #E0F2FE !important;
+        stroke: #E0F2FE !important;
     }
-    [data-testid="chatAvatarIcon-assistant"] {
+
+    /* Assistant avatar — teal background, lighter teal border + icon */
+    [data-testid="chatAvatarIcon-assistant"],
+    [data-testid="stChatMessageAvatarAssistant"] {
         background-color: #0369A1 !important;
         border: 2px solid #38BDF8 !important;
         color: #E0F2FE !important;
     }
     [data-testid="chatAvatarIcon-assistant"] svg,
-    [data-testid="chatAvatarIcon-assistant"] svg path {
+    [data-testid="chatAvatarIcon-assistant"] svg path,
+    [data-testid="stChatMessageAvatarAssistant"] svg,
+    [data-testid="stChatMessageAvatarAssistant"] svg path {
         fill: #E0F2FE !important;
         color: #E0F2FE !important;
+        stroke: #E0F2FE !important;
     }
 
     /* Sidebar secondary buttons → subtle clickable link-row style.

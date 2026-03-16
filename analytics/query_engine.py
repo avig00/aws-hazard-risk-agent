@@ -91,6 +91,13 @@ def _sanitize_params(params: dict) -> dict:
                 raise ValueError(f"Unknown hazard_col '{value}'. Allowed: {sorted(ALLOWED_HAZARD_FEATURE_COLS)}")
             clean[key] = value
 
+        elif key == "order_col":
+            # Whitelist of sortable columns in top_counties_by_hazard
+            allowed_order_cols = {"total_events", "total_fatalities", "total_injuries"}
+            if value not in allowed_order_cols:
+                raise ValueError(f"Invalid order_col '{value}'. Allowed: {sorted(allowed_order_cols)}")
+            clean[key] = value
+
         else:
             # Generic string: strip any SQL-dangerous characters
             clean[key] = re.sub(r"[;'\"\-\-]", "", str(value))

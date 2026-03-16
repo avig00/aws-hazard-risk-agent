@@ -216,6 +216,14 @@ def classify_intent(question: str, default_limit: int = 10) -> QueryIntent:
     # to hazard_event_summary rather than NRI scores in risk_feature_mart.
     if matched_template == "top_counties_by_risk" and params.get("hazard_type", "all") != "all":
         matched_template = "top_counties_by_hazard"
+        # Choose sort column based on what the question is asking for
+        q_lower = question.lower()
+        if any(w in q_lower for w in ("fatal", "death", "deaths", "killed", "casualties")):
+            params["order_col"] = "total_fatalities"
+        elif any(w in q_lower for w in ("injur", "hurt", "wounded")):
+            params["order_col"] = "total_injuries"
+        else:
+            params["order_col"] = "total_events"
 
     # Route hazard-specific trend queries.
     # Prefer hazard_trend_by_feature (uses risk_feature_mart_current dedicated columns,
