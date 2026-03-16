@@ -289,6 +289,28 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
             f"Gold-layer hazard types: {_DB_HAZARD_TYPES}."
         )
 
+    # Pattern 3: Wildfire queries against hazard_event_summary — NOAA Storm Events
+    # systematically underreports wildfires because fire data is primarily tracked by
+    # USFS, CAL FIRE, and NIFC, not NOAA. Warn the user so they don't treat these
+    # event counts as a complete picture of wildfire risk.
+    if db_hazard == "Wildfire" and intent_template in (
+        "top_counties_by_hazard", "hazard_event_increase", "hazard_trend_specific",
+    ):
+        return (
+            "DATA LIMITATION — must tell the user: "
+            "These results are sourced from the NOAA Storm Events database, which "
+            "systematically underreports wildfires. NOAA is a meteorological agency; "
+            "comprehensive wildfire records are maintained by USFS, CAL FIRE, and the "
+            "National Interagency Fire Center (NIFC) — none of which feed into NOAA Storm "
+            "Events. A county only appears in this data if a local NWS Weather Forecast "
+            "Office filed a storm event report for a fire, so major fire counties (e.g., "
+            "Butte County CA — 2018 Camp Fire; Shasta, Plumas, Mariposa CA) may rank low "
+            "or not appear at all. The event counts shown reflect NOAA-reported fire "
+            "incidents, NOT total wildfire destruction or acreage. Treat these rankings as "
+            "a lower-bound indicator only, and recommend the user consult NIFC or CAL FIRE "
+            "data for a complete wildfire picture."
+        )
+
     # Pattern 2: any template where all NOAA event/damage columns are zero.
     present_cols = [c for c in _NOAA_METRIC_COLS if c in results[0]]
     if present_cols:
