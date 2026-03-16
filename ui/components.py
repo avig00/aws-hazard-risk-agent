@@ -143,9 +143,18 @@ def render_analytics_table(results: list, title: str = "Results", chart_key: str
     # If sort_col is provided (from the SQL ORDER BY), use it directly so the chart
     # always reflects the same column the query ranked by.
     numeric_cols = display_df.select_dtypes(include="number").columns.tolist()
-    label_col = next(
-        (c for c in ["county_name", "state", "year"] if c in display_df.columns), None
-    )
+
+    # Build a "County, State" label column when both are present so the x-axis
+    # is unambiguous (multiple states can have a county with the same name).
+    chart_df = display_df.copy()
+    if "county_name" in chart_df.columns and "state" in chart_df.columns:
+        chart_df["_label"] = chart_df["county_name"] + ", " + chart_df["state"]
+        label_col = "_label"
+    else:
+        label_col = next(
+            (c for c in ["county_name", "state", "year"] if c in chart_df.columns), None
+        )
+
     if sort_col and sort_col in numeric_cols:
         metric_col = sort_col
     else:
@@ -156,7 +165,7 @@ def render_analytics_table(results: list, title: str = "Results", chart_key: str
 
     if not metric_col or not label_col or label_col == "year":
         return
-    if len(display_df) > 50:
+    if len(chart_df) > 50:
         return
 
     # Blue gradient: dark navy (low) → sky blue (high) — matches dark theme
@@ -165,7 +174,7 @@ def render_analytics_table(results: list, title: str = "Results", chart_key: str
     y_label = _CHART_LABELS.get(metric_col, metric_col.replace("_", " ").title())
 
     fig = px.bar(
-        display_df.head(20),
+        chart_df.head(20),
         x=label_col,
         y=metric_col,
         color=metric_col,

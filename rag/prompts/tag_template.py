@@ -108,6 +108,7 @@ def build_tag_prompt(
     intent: str,
     row_count: int,
     data_note: str = "",
+    order_col: str = "",
 ) -> str:
     """
     Assemble the TAG user message for Bedrock Claude.
@@ -138,6 +139,14 @@ def build_tag_prompt(
         if data_note else ""
     )
 
+    order_col_note = (
+        f"\nRANKING NOTE: Results are sorted by {order_col}. "
+        f"Do NOT make comparative claims about other columns in the result (e.g., 'also has the most fatalities', "
+        f"'also leads in injuries') — those columns are included as context only and are NOT globally ranked. "
+        f"A county that ranks high on {order_col} may not rank highest on other metrics across the full dataset, "
+        f"because this result set is limited to the top rows by {order_col} only.\n"
+    ) if order_col else ""
+
     return f"""QUESTION: {question}
 
 QUERY EXECUTED (governed SQL — Gold layer only):
@@ -146,7 +155,7 @@ QUERY EXECUTED (governed SQL — Gold layer only):
 ```
 
 RESULTS ({row_count} rows total):
-{data_note_section}{column_section}
+{data_note_section}{order_col_note}{column_section}
 {table_text}
 
 ---

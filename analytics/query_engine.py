@@ -337,6 +337,7 @@ def run_tag_query(
     results = query_result["results"]
     sql = query_result["sql_executed"]
     intent = query_result["intent"]
+    order_col = query_result.get("order_col", "")
     row_count = query_result["row_count"]
 
     # Step 2: graceful no-rows handling
@@ -364,6 +365,7 @@ def run_tag_query(
         intent=intent,
         row_count=row_count,
         data_note=data_note,
+        order_col=order_col,
     )
 
     try:
