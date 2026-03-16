@@ -66,14 +66,16 @@ def _fetch_county_features(
         county_filter = f"r.county_fips = '{county_identifier}'"
     else:
         safe_name = re.sub(r"[^a-zA-Z \-]", "", county_identifier)[:40].strip()
-        # Handle hyphenated names: try exact match, hyphen→space variant, and prefix LIKE
+        # Handle hyphenated names: try exact match, hyphen→space variant, and prefix LIKE.
+        # Use safe_lower (e.g. 'miami-dade%') not just the first word ('miami%') to avoid
+        # matching unrelated counties like Miami County, OH when asking for Miami-Dade, FL.
         safe_lower = safe_name.lower()
         safe_spaces = safe_lower.replace("-", " ")
-        first_word = safe_spaces.split()[0] if safe_spaces.split() else safe_spaces
         county_filter = (
             f"(LOWER(d.county_name) = '{safe_lower}' OR "
             f"LOWER(d.county_name) = '{safe_spaces}' OR "
-            f"LOWER(d.county_name) LIKE '{first_word}%')"
+            f"LOWER(d.county_name) LIKE '{safe_lower}%' OR "
+            f"LOWER(d.county_name) LIKE '{safe_spaces}%')"
         )
 
     sql = f"""
