@@ -430,13 +430,19 @@ def run_agent(
                 "with document-grounded context.\n\n"
                 "Rules:\n"
                 f"{opening_rule}\n"
-                "- Follow with 1–2 sentences of contextual explanation using the DOCUMENT CONTEXT.\n"
-                "- Do NOT re-state or paraphrase the full data table — you are writing a verbal "
-                "complement to the table already shown to the user, not a substitute for it.\n"
+                "- After the opening, briefly mention 2–3 more counties from the DATA ANSWER "
+                "with their key figures. Do not narrate only Row 1 — the user needs a sense of "
+                "the full distribution, not a single-county analysis.\n"
+                "- If the question contains a general 'why' (e.g. 'why are floods common', "
+                "'why are they vulnerable'), answer it broadly using the DOCUMENT CONTEXT — "
+                "explain the underlying structural or geographic reasons, NOT just speculation "
+                "about the top county. This general explanation should follow the data summary.\n"
+                "- Do NOT re-state or paraphrase the full data table — the table is already "
+                "shown to the user. Write a verbal complement, not a substitute.\n"
                 "- Do NOT use section headers like 'Data Answer:' or 'Document Context:'.\n"
                 "- NEVER describe a lower score as higher than a higher score. "
                 "If county A has score 100.0 and county B has 99.93, county A ranks higher.\n"
-                "- If no document context was retrieved, answer using only the data findings."
+                "- If no document context was retrieved, answer the 'why' using domain knowledge."
             )
 
             hybrid_user = (
