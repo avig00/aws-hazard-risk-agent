@@ -45,6 +45,7 @@ _HIDDEN_COLS = {"county_fips"}
 # Preferred metric for bar chart (first match wins)
 _CHART_METRIC_PRIORITY = [
     "avg_expected_loss", "absolute_increase", "events_recent_period",
+    "total_fatalities", "total_injuries",
     "total_events", "avg_events_recent", "fema_declaration_count",
     "avg_risk_score",
 ]
@@ -54,6 +55,8 @@ _CHART_LABELS = {
     "avg_expected_loss":    "Avg Expected Loss ($)",
     "absolute_increase":    "Increase in Events",
     "events_recent_period": "Events (Recent Period)",
+    "total_fatalities":     "Fatalities",
+    "total_injuries":       "Injuries",
     "total_events":         "Total Events",
     "avg_events_recent":    "Avg Events (Recent Period)",
     "fema_declaration_count": "FEMA Declarations",
