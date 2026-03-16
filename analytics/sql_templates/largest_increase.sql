@@ -24,10 +24,7 @@ SELECT
     a.state,
     ROUND(a.avg_events_a, 2)                            AS avg_events_early,
     ROUND(b.avg_events_b, 2)                            AS avg_events_recent,
-    ROUND(b.avg_events_b - a.avg_events_a, 2)           AS absolute_increase,
-    ROUND(
-        (b.avg_events_b - a.avg_events_a) / NULLIF(a.avg_events_a, 0) * 100, 1
-    )                                                   AS pct_increase
+    ROUND(b.avg_events_b - a.avg_events_a, 2)           AS absolute_increase
 FROM period_a a
 JOIN period_b b ON a.county_fips = b.county_fips
 ORDER BY absolute_increase DESC

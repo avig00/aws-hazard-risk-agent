@@ -26,11 +26,7 @@ SELECT
     d.state,
     a.total_events_a                                    AS events_early_period,
     b.total_events_b                                    AS events_recent_period,
-    (b.total_events_b - a.total_events_a)               AS absolute_increase,
-    ROUND(
-        CAST(b.total_events_b - a.total_events_a AS double)
-        / NULLIF(a.total_events_a, 0) * 100, 1
-    )                                                   AS pct_increase
+    (b.total_events_b - a.total_events_a)               AS absolute_increase
 FROM period_a a
 JOIN period_b b ON a.county_fips = b.county_fips
 JOIN gold_hazard.county_dim d ON a.county_fips = d.county_fips
