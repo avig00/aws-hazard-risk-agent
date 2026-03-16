@@ -23,6 +23,43 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 
+_STATE_NAME_TO_ABBR = {
+    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
+    "california": "CA", "colorado": "CO", "connecticut": "CT", "delaware": "DE",
+    "florida": "FL", "georgia": "GA", "hawaii": "HI", "idaho": "ID",
+    "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS",
+    "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
+    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
+    "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
+    "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
+    "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
+    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
+    "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
+    "wisconsin": "WI", "wyoming": "WY",
+}
+_STATE_ABBRS = {v for v in _STATE_NAME_TO_ABBR.values()}
+
+
+def _extract_state_hint(question: str) -> str:
+    """
+    Extract a U.S. state abbreviation from the question.
+    Matches full state names ('Texas') and two-letter abbreviations when
+    they appear after a comma or the word 'in' (e.g. 'Harris County, TX').
+    Returns a 2-letter abbreviation, or '' if none found.
+    """
+    q_lower = question.lower()
+    # Full state name
+    for name, abbr in sorted(_STATE_NAME_TO_ABBR.items(), key=lambda x: -len(x[0])):
+        if re.search(r"\b" + re.escape(name) + r"\b", q_lower):
+            return abbr
+    # Two-letter abbreviation after comma or "in " (e.g. "Harris County, TX")
+    m = re.search(r"(?:,\s*|\bin\s+)([A-Z]{2})\b", question)
+    if m and m.group(1) in _STATE_ABBRS:
+        return m.group(1)
+    return ""
+
+
 def _extract_county_name(question: str):
     """Extract a county name or FIPS code from a question. Returns str or None."""
     # 5-digit FIPS code
@@ -43,6 +80,7 @@ def _fetch_county_features(
     county_identifier: str,
     region: str = "us-east-1",
     s3_output: str = None,
+    state_hint: str = "",
 ) -> tuple:
     """
     Query Athena for cross-sectional feature data for a county.
@@ -53,6 +91,8 @@ def _fetch_county_features(
 
     county_identifier is either a 5-digit FIPS string or a county name fragment.
     Handles hyphenated names (e.g. "Miami-Dade" matches "Miami Dade" in county_dim).
+    state_hint: 2-letter state abbreviation to narrow lookup (prevents e.g. "Harris"
+                matching "Harrison County, MO" when user clearly means Harris County, TX).
     Returns (features_dict, county_name, county_fips).
     Returns ({}, county_identifier, "") on failure or no results.
     """
@@ -77,6 +117,10 @@ def _fetch_county_features(
             f"LOWER(d.county_name) LIKE '{safe_lower}%' OR "
             f"LOWER(d.county_name) LIKE '{safe_spaces}%')"
         )
+        # Narrow by state when the question provides a clear state reference.
+        # Prevents ambiguous names (e.g. "Harris" → Harrison MO) when state context exists.
+        if state_hint and re.match(r"^[A-Z]{2}$", state_hint):
+            county_filter += f" AND UPPER(d.state) = '{state_hint}'"
 
     sql = f"""
 WITH base AS (
@@ -263,7 +307,10 @@ def run_agent(
             county_fips = ""
             county_id = _extract_county_name(question)
             if county_id:
-                features, county_name, county_fips = _fetch_county_features(county_id)
+                state_hint = _extract_state_hint(question)
+                features, county_name, county_fips = _fetch_county_features(
+                    county_id, state_hint=state_hint
+                )
             pred = predict_risk(features=features, endpoint_name=sagemaker_endpoint)
             pred["county_name"] = county_name
             pred["county_fips"] = county_fips
@@ -334,23 +381,40 @@ def run_agent(
         result["sources"] = ask_out.get("citations", [])
 
     elif "query" in decision.tools and "ask" in decision.tools:
-        # Hybrid route: combine TAG answer (structured data) with RAG chunks
-        # for a single unified response that draws on both sources.
+        # Hybrid route: combine TAG answer (structured data) with RAG chunks.
+        # Uses a dedicated hybrid prompt — NOT the ask/RAG system prompt — so the LLM
+        # leads with the specific data findings (top-ranked county, event counts, etc.)
+        # and then adds contextual explanation from retrieved documents.
         if bedrock_call_fn:
             tag_answer = query_out.get("answer", "")
             rag_chunks = ask_out.get("chunks", [])
+            rag_text = "\n\n".join(
+                c.get("text", "") for c in rag_chunks[:3] if c.get("text", "").strip()
+            )
 
-            # Augment the RAG prompt with the TAG narrative as additional context
-            augmented_question = question
-            if tag_answer:
-                augmented_question = (
-                    f"{question}\n\n"
-                    f"[Structured analytics answer]\n{tag_answer}"
-                )
+            hybrid_system = (
+                "You are a senior hazard risk analyst combining structured data findings "
+                "with document-grounded context.\n\n"
+                "Rules:\n"
+                "- Open with 1–2 sentences citing the specific county names and figures "
+                "from the DATA ANSWER. The top-ranked county MUST be named in your first sentence.\n"
+                "- Follow with 1–2 sentences of contextual explanation using the DOCUMENT CONTEXT.\n"
+                "- Do NOT re-state or paraphrase the full data table — you are writing a verbal "
+                "complement to the table already shown to the user, not a substitute for it.\n"
+                "- Do NOT use section headers like 'Data Answer:' or 'Document Context:'.\n"
+                "- If no document context was retrieved, answer using only the data findings."
+            )
 
-            user_message = build_ask_prompt(augmented_question, rag_chunks)
+            hybrid_user = (
+                f"QUESTION: {question}\n\n"
+                f"DATA ANSWER (cite these specific values — lead with the top result):\n"
+                f"{tag_answer}\n\n"
+                f"DOCUMENT CONTEXT (use for explanation only):\n"
+                f"{rag_text or 'No documents retrieved.'}"
+            )
+
             try:
-                result["answer"] = bedrock_call_fn(SYSTEM_PROMPT, user_message)
+                result["answer"] = bedrock_call_fn(hybrid_system, hybrid_user)
             except Exception as exc:
                 logger.error("Hybrid synthesis failed: %s", exc)
                 result["answer"] = tag_answer or _fallback_answer(tool_outputs, decision.tools)

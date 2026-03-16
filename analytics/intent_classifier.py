@@ -33,10 +33,12 @@ _PATTERNS = [
         "params": {"period_a_start": DEFAULT_START_YEAR - 4, "period_a_end": DEFAULT_START_YEAR,
                    "period_b_start": DEFAULT_START_YEAR + 1, "period_b_end": DEFAULT_END_YEAR},
     },
-    # "compare harris county vs miami-dade" / "comparison between X and Y"
+    # "harris county vs miami-dade" / "X county versus Y county"
+    # Requires explicit vs/versus — "compare...counties" alone is too broad and
+    # falsely triggers on "how does X compare to other counties" (a top-N question).
     {
         "template": "county_comparison",
-        "regex": r"(compare|comparison|versus|vs\.?)\s+.+(county|counties)",
+        "regex": r"(versus|vs\.?)\s+.+(county|counties)",
         "params": {"county_fips_list": "'48201','12086'"},  # Harris TX, Miami-Dade FL defaults
     },
     # "most FEMA declarations by state" / "states with the most disaster declarations"
