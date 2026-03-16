@@ -32,7 +32,7 @@ def render_history():
         render_prediction_card, render_sql_expander, render_tool_badges,
         render_trend_chart,
     )
-    for msg in st.session_state.messages:
+    for msg_idx, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
             content = msg["content"]
             meta = msg.get("metadata", {})
@@ -66,9 +66,9 @@ def render_history():
 
                 if results_data:
                     if "trend" in q_intent or q_intent == "hazard_trend_by_year":
-                        render_trend_chart(results_data)
+                        render_trend_chart(results_data, chart_key=f"msg{msg_idx}")
                     else:
-                        render_analytics_table(results_data, title="Analytics Results")
+                        render_analytics_table(results_data, title="Analytics Results", chart_key=f"msg{msg_idx}")
 
                 if sql:
                     render_sql_expander(sql)

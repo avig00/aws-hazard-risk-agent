@@ -97,7 +97,7 @@ def render_tool_badges(tools_used: list, intent: str = "", reason: str = "") -> 
 
 # ── Analytics table ───────────────────────────────────────────────────────────
 
-def render_analytics_table(results: list, title: str = "Results") -> None:
+def render_analytics_table(results: list, title: str = "Results", chart_key: str = "analytics") -> None:
     """
     Display Athena query results as a formatted, interactive dataframe.
     - Numeric columns are formatted with $ / % symbols
@@ -178,12 +178,12 @@ def render_analytics_table(results: list, title: str = "Results") -> None:
         xaxis=dict(gridcolor="#1E2535"),
         yaxis=dict(gridcolor="#1E2535"),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"{chart_key}_bar")
 
 
 # ── Trend chart ───────────────────────────────────────────────────────────────
 
-def render_trend_chart(results: list, x_col: str = "year", y_col: str = "total_events") -> None:
+def render_trend_chart(results: list, x_col: str = "year", y_col: str = "total_events", chart_key: str = "trend") -> None:
     """Line chart for year-over-year trend data."""
     if not results:
         return
@@ -223,7 +223,7 @@ def render_trend_chart(results: list, x_col: str = "year", y_col: str = "total_e
         xaxis=dict(gridcolor="#1E2535"),
         yaxis=dict(gridcolor="#1E2535"),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"{chart_key}_line")
 
 
 # ── Risk map ──────────────────────────────────────────────────────────────────
