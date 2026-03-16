@@ -389,16 +389,37 @@ def run_tag_query(
     order_col = query_result.get("order_col", "")
     row_count = query_result["row_count"]
 
+    # Step 1b: for fatality/injury sorts, drop rows where the sort column is 0.
+    # Done in Python (not SQL HAVING) to avoid Athena alias-in-HAVING edge cases.
+    # If all rows are zero the result set becomes empty and the no-data handler fires,
+    # which is the correct behaviour: don't present "0 fatalities" as a ranking answer.
+    if order_col in ("total_fatalities", "total_injuries") and results:
+        results = [r for r in results if float(r.get(order_col) or 0) > 0]
+        query_result = {**query_result, "results": results, "row_count": len(results)}
+        row_count = len(results)
+
     # Step 2: graceful no-rows handling
     if not results:
         logger.info("TAG synthesis skipped: no rows returned")
-        return {
-            **query_result,
-            "answer": (
+        if order_col in ("total_fatalities", "total_injuries"):
+            metric = "fatalities" if order_col == "total_fatalities" else "injuries"
+            no_data_msg = (
+                f"No counties with recorded {metric} were found for this hazard type "
+                f"in the NOAA Storm Events data (2010–2023). NOAA Storm Events may not "
+                f"capture all {metric} for this hazard — for example, wildfire, tropical "
+                f"storm, and heat fatalities are often underreported or attributed to "
+                f"different event types. Try querying by total events instead, or check "
+                f"a primary source (e.g. NIFC for wildfire, NHC for tropical storms)."
+            )
+        else:
+            no_data_msg = (
                 "No data was found for this query. The Gold-layer dataset may not "
                 "contain records matching your filters (hazard type, year range, or "
                 "county). Try broadening your search."
-            ),
+            )
+        return {
+            **query_result,
+            "answer": no_data_msg,
             "tag_enabled": True,
         }
 
