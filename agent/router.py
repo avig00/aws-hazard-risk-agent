@@ -31,8 +31,8 @@ _QUERY_SIGNALS = [
     r"\bcompare\b", r"\branking\b", r"\bhow\s+many\b", r"\btotal\b",
     r"\baverage\b", r"\blist\s+(all\s+)?counties\b", r"\blargest\s+increase\b",
     r"\byear.over.year\b", r"\bby\s+year\b",
-    # "which X had the most Y" — always a structured data query
-    r"\bmost\b",
+    # "which X had the most Y" / "worst counties" / "greatest risk" — always a structured data query
+    r"\bmost\b", r"\bworst\b", r"\bgreatest\b",
     # FEMA declarations are always answerable from Gold-layer data
     r"\bfema\s+declaration",
 ]
