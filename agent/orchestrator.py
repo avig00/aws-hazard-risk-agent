@@ -267,6 +267,7 @@ def run_agent(
             pred = predict_risk(features=features, endpoint_name=sagemaker_endpoint)
             pred["county_name"] = county_name
             pred["county_fips"] = county_fips
+            pred["county_state"] = features.get("state", "")
             if not county_id:
                 pred["_no_county"] = True
             tool_outputs["predict"] = pred
@@ -369,11 +370,13 @@ def run_agent(
             )
         elif "risk_tier" in pred_out:
             county = pred_out.get("county_name") or pred_out.get("county_fips") or "the county"
+            state = pred_out.get("county_state", "")
+            county_label = f"{county}, {state}" if state else county
             result["answer"] = (
                 f"**ML Risk Prediction**\n\n"
                 f"Based on the XGBoost classifier trained on NOAA storm history, "
                 f"demographics, and NRI risk scores:\n\n"
-                f"**{county}** → predicted risk tier: **{pred_out['risk_tier']}**"
+                f"**{county_label}** → predicted risk tier: **{pred_out['risk_tier']}**"
             )
         else:
             result["answer"] = _fallback_answer(tool_outputs, decision.tools)
