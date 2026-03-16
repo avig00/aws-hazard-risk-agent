@@ -12,7 +12,7 @@ Feature alignment:
   - Missing state dummies are filled with 0.
 
 Content type: text/csv (SageMaker XGBoost built-in algorithm)
-Response: single integer (0=LOW, 1=MEDIUM, 2=HIGH)
+Response: 3 comma-separated probabilities (multi:softprob); argmax gives predicted class
 """
 import io
 import json
@@ -63,8 +63,9 @@ def predict_risk(
 
     Returns:
         dict with:
-          - risk_tier: str  (LOW / MEDIUM / HIGH)
-          - class_id:  int  (0 / 1 / 2)
+          - risk_tier:    str   (LOW / MEDIUM / HIGH)
+          - class_id:     int   (0 / 1 / 2)
+          - probabilities: dict  ({"LOW": float, "MEDIUM": float, "HIGH": float})
           - endpoint_name: str
     """
     if config is None:
@@ -102,20 +103,25 @@ def predict_risk(
         Body=csv_body,
     )
     raw = response["Body"].read().decode("utf-8").strip()
-    class_id = int(float(raw))
+    # multi:softprob returns 3 comma-separated probabilities; argmax gives predicted class
+    probs_raw = [float(x) for x in raw.split(",")]
+    class_id = int(np.argmax(probs_raw))
     risk_tier = LABEL_NAMES[class_id]
+    probabilities = {LABEL_NAMES[i]: round(p, 2) for i, p in enumerate(probs_raw)}
 
     logger.info(
-        "Endpoint=%s | county_fips=%s | predicted=%s (%d)",
+        "Endpoint=%s | county_fips=%s | predicted=%s (%d) | probs=%s",
         endpoint_name,
         features.get("county_fips", "unknown"),
         risk_tier,
         class_id,
+        probabilities,
     )
 
     return {
         "risk_tier": risk_tier,
         "class_id": class_id,
+        "probabilities": probabilities,
         "endpoint_name": endpoint_name,
     }
 

@@ -3,7 +3,7 @@ model:
   max_depth: 4
   learning_rate: 0.05
   n_estimators: 800
-  objective: multi:softmax
+  objective: multi:softprob
   num_class: 3
   subsample: 0.8
   colsample_bytree: 0.6
