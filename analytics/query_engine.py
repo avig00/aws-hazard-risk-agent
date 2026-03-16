@@ -208,13 +208,21 @@ def run_query(
     results = rows_all
     logger.info("Query returned %d rows", len(results))
 
+    # For templates with a hardcoded ORDER BY (not a {order_col} parameter), inject
+    # the sort column name so the TAG prompt can tell the LLM what the ranking criterion is.
+    _FIXED_ORDER_COLS = {
+        "hazard_event_increase": "absolute_increase",
+        "largest_increase":      "absolute_increase",
+    }
+    order_col = clean_params.get("order_col", "") or _FIXED_ORDER_COLS.get(intent.template, "")
+
     return {
         "results": results,
         "sql_executed": safe_sql,
         "intent": intent.template,
         "row_count": len(results),
         "tool": "query",
-        "order_col": clean_params.get("order_col", ""),
+        "order_col": order_col,
     }
 
 
