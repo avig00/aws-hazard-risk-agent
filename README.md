@@ -2,11 +2,18 @@
 
 An enterprise-grade agentic AI system that answers complex county-level disaster risk questions by combining predictive ML, governed NL→SQL analytics, and RAG-based document retrieval — with a live Streamlit dashboard.
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://YOUR-APP.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://xhpmugptxqqtnwxaogpghz.streamlit.app/)
 
 ## App Preview
 
-![App Preview](assets/app-preview.gif)
+![App Demo](assets/demo.gif)
+
+<table>
+  <tr>
+    <td><img src="assets/screenshot_1.png" alt="Analytics view" width="100%"/></td>
+    <td><img src="assets/screenshot_2.png" alt="ML prediction view" width="100%"/></td>
+  </tr>
+</table>
 
 ---
 
@@ -87,7 +94,9 @@ User Question
 - SageMaker Pipelines · XGBoost · MLflow · SHAP
 
 **LLM & Retrieval**
-- Amazon Bedrock (Nova Lite via Converse API) · Pinecone vector database · Amazon Titan Embeddings
+- Amazon Bedrock (**Nova Lite** via Converse API) · Pinecone vector database · Amazon Titan Embeddings
+
+  > Nova Lite was chosen over Claude on Bedrock for two reasons: **vendor stability** (Nova is Amazon's own model family and will always be available on Bedrock by definition, unlike third-party models subject to commercial partnerships) and **cost predictability** (all LLM billing stays within a single AWS account).
 
 **Application Layer**
 - Streamlit (frontend) · FastAPI (backend API)
@@ -141,6 +150,7 @@ The system was designed to demonstrate production AI platform principles:
 - Separation of tools — ML inference, analytics, and retrieval are independent modules with clean interfaces; adding a new tool requires no changes to existing ones
 - Safe query execution — Athena guardrails enforce Gold-layer-only access, automatic LIMIT caps, year-range validation, and a 100 MB scan-cost ceiling
 - Modular agent architecture — the orchestrator is tool-agnostic; routing rules and tool implementations are decoupled
+- Deterministic routing — the agent router uses multi-signal regex rules rather than an LLM classifier, trading flexibility for zero-latency, zero-cost, fully auditable routing decisions
 - Reproducible ML pipelines — SageMaker Pipelines with MLflow experiment tracking, model registry, and manual approval gate
 - Automated monitoring and retraining — drift detection via KL divergence, EventBridge-triggered retraining on drift alerts
 
@@ -284,6 +294,8 @@ The agent is evaluated end-to-end using an LLM-as-Judge harness (Amazon Nova Lit
 | Hybrid: predicted risk + property damage | predict + query | 5.0 | PASS |
 
 The two WARN cases reflect data coverage gaps rather than agent logic failures. The wildfire trend query returns a single year of data — the Gold-layer hazard summary has sparse Wildfire records — so there is no multi-year trend to analyze and the LLM correctly surfaces this limitation. The NRI methodology case relies on the RAG tool; without a Pinecone API key in the eval environment, it falls back to domain knowledge, which the judge penalizes for lack of document citations. Both cases resolve in a fully configured production deployment.
+
+> **On LLM choice:** Nova Lite was selected over Claude for vendor stability and cost predictability — see Technology Stack for details. The evaluation scores above are representative of the synthesis quality achievable with this model on structured data tasks.
 
 ---
 

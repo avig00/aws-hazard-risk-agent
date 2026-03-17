@@ -181,5 +181,13 @@ docker-compose.override.yml
 # Never commit real secrets
 .streamlit/secrets.toml
 
+# ============================================
+# ASSETS — source video files (large, not needed in repo)
+# ============================================
+
+# Keep converted GIFs and screenshots; exclude raw video
+assets/*.mov
+assets/*.mp4
+
 # MLflow local run artifacts
 mlruns/
