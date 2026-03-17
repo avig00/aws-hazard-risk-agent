@@ -141,9 +141,11 @@ def build_tag_prompt(
 
     order_col_note = (
         f"\nRANKING NOTE: Results are sorted by {order_col}. "
-        f"Do NOT make comparative claims about other columns in the result (e.g., 'also has the most fatalities', "
-        f"'also leads in injuries') — those columns are included as context only and are NOT globally ranked. "
-        f"A county that ranks high on {order_col} may not rank highest on other metrics across the full dataset, "
+        f"Do NOT use superlatives (highest, lowest, most, least, greatest, best, worst) for any column "
+        f"other than {order_col} — those columns are included as context only and are NOT globally ranked. "
+        f"Example of what NOT to write: 'Riverside County has the highest avg_vulnerability score of 33.33' — "
+        f"that county ranks high on {order_col}, but its vulnerability score is NOT confirmed highest across all counties. "
+        f"A county that ranks high on {order_col} may rank anywhere on other metrics across the full dataset, "
         f"because this result set is limited to the top rows by {order_col} only.\n"
     ) if order_col else ""
 

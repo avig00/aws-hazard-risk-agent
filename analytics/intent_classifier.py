@@ -79,11 +79,34 @@ def _extract_years(question: str) -> dict:
 
 
 def _extract_limit(question: str, default: int = 10) -> int:
-    """Extract 'top N' or 'N counties' from question."""
+    """
+    Extract 'top N' or 'N counties' from question.
+    Returns 1 for singular superlative questions like "which county has the highest risk?"
+    or "what is the least risky county?" — these ask for a single answer, not a list.
+    """
+    # Explicit "top N" or "N counties" pattern overrides everything
     match = re.search(r"\btop\s+(\d+)\b|\b(\d+)\s+count", question, re.IGNORECASE)
     if match:
         n = match.group(1) or match.group(2)
         return int(n)
+
+    # Singular county + superlative → user wants exactly one result
+    # Matches: "which county has the highest", "what county is the most",
+    #          "the least risky county", "the safest county", "the worst county"
+    is_singular_county = bool(
+        re.search(r"\b(which|what|the)\s+(single\s+)?county\b", question, re.IGNORECASE)
+        and not re.search(r"\bcounties\b", question, re.IGNORECASE)
+    )
+    has_superlative = bool(
+        re.search(
+            r"\b(highest|most|worst|greatest|least|lowest|best|safest|riskiest|"
+            r"deadliest|costliest|largest|smallest|biggest)\b",
+            question, re.IGNORECASE,
+        )
+    )
+    if is_singular_county and has_superlative:
+        return 1
+
     return default
 
 

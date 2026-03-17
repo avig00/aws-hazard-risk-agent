@@ -90,6 +90,15 @@ st.markdown(
         stroke: #E0F2FE !important;
     }
 
+    /* Metric delta label — override Streamlit's default green to match blue theme.
+       Used in the prediction card probability breakdown ("predicted" label). */
+    [data-testid="stMetricDelta"] {
+        color: #4F9CF9 !important;
+    }
+    [data-testid="stMetricDelta"] svg {
+        display: none !important;
+    }
+
     /* Sidebar secondary buttons → subtle clickable link-row style.
        Clear conversation uses type="primary" and is unaffected. */
     section[data-testid="stSidebar"] button[kind="secondary"] {

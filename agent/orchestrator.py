@@ -11,6 +11,27 @@ import re
 import time
 
 
+# SQL injection / DDL patterns — inputs that look like raw SQL commands rather
+# than natural-language questions.  Detected before routing so they never reach
+# the query engine, RAG retrieval, or ML endpoint.
+_INJECTION_PATTERNS = [
+    re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE)\b", re.IGNORECASE),
+    re.compile(r"\bDROP\s+TABLE\b", re.IGNORECASE),
+    re.compile(r"\bDELETE\s+FROM\b", re.IGNORECASE),
+    re.compile(r"\bINSERT\s+INTO\b", re.IGNORECASE),
+    re.compile(r"\bCREATE\s+TABLE\b", re.IGNORECASE),
+    re.compile(r"\bALTER\s+TABLE\b", re.IGNORECASE),
+    re.compile(r"\bTRUNCATE\s+TABLE\b", re.IGNORECASE),
+    re.compile(r"\bSELECT\s+\*\s+FROM\b", re.IGNORECASE),   # wildcard dump
+    re.compile(r";\s*(DROP|DELETE|INSERT|UPDATE|CREATE|ALTER|TRUNCATE)\b", re.IGNORECASE),  # chained
+]
+
+
+def _is_injection_attempt(question: str) -> bool:
+    """Return True if the input looks like a raw SQL command rather than a question."""
+    return any(p.search(question) for p in _INJECTION_PATTERNS)
+
+
 class _AmbiguousCountyError(Exception):
     """Raised when a county name matches multiple states and no state was specified."""
     def __init__(self, county_name: str, states: list):
@@ -367,6 +388,22 @@ def run_agent(
     Returns:
         dict with keys: answer, tool_used, data, sources, routing_reason
     """
+    # ── Security: reject SQL injection / DDL attempts before routing ──────────
+    if _is_injection_attempt(question):
+        logger.warning("Injection attempt blocked: %s", question[:120])
+        return {
+            "question": question,
+            "routing": {"tools": [], "reason": "blocked: injection attempt", "is_hybrid": False},
+            "tool_outputs": {},
+            "tool_used": [],
+            "answer": (
+                "This input looks like a raw SQL command rather than a question. "
+                "Please ask a natural-language question about U.S. county hazard risk — "
+                "for example: *Which county has the highest flood risk?*"
+            ),
+            "sources": [],
+        }
+
     decision: RoutingDecision = route(question)
     logger.info("Routing: %s → tools=%s", question[:80], decision.tools)
 

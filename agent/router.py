@@ -38,11 +38,16 @@ _QUERY_SIGNALS = [
     # "show me risk data" / "show risk" — imperative display request implies structured data
     r"\bshow\b",
 ]
-_ASK_SIGNALS = [
-    r"\bwhy\b", r"\bwhat\s+is\b", r"\bexplain\b", r"\bdescribe\b",
+# Strong ask signals — clearly request explanation or document-grounded reasoning.
+# These trigger the query+ask hybrid when combined with a query signal.
+_ASK_SIGNALS_STRONG = [
+    r"\bwhy\b", r"\bexplain\b", r"\bdescribe\b",
     r"\bhow\s+does\b", r"\bwhat\s+causes?\b", r"\bdocumentation\b",
     r"\breport\b", r"\bnarrative\b", r"\bhistory\s+of\b",
 ]
+# NOTE: "what is" is intentionally excluded from strong signals — "What is the trend?"
+# is a data query, not a document Q&A. The default fallback handles it as ask-only
+# when no query signal is present.
 
 
 def _matches(question: str, patterns: list) -> bool:
@@ -63,7 +68,9 @@ def route(question: str) -> RoutingDecision:
     """
     wants_predict = _matches(question, _PREDICT_SIGNALS)
     wants_query = _matches(question, _QUERY_SIGNALS)
-    wants_ask = _matches(question, _ASK_SIGNALS)
+    wants_ask_strong = _matches(question, _ASK_SIGNALS_STRONG)
+    # wants_ask (weak) used only for the default fallback — no explicit check needed
+    # since the fallback already returns 'ask' for anything unmatched above.
 
     # Hybrid: explicitly asks for both structured data AND model prediction.
     # Require a county reference — without one the ML endpoint cannot run (it needs
@@ -87,8 +94,10 @@ def route(question: str) -> RoutingDecision:
             reasoning="Predict signal present but no county identified; routing to analytics only",
         )
 
-    # Hybrid: structured result + explanation
-    if wants_query and wants_ask:
+    # Hybrid: structured result + explanation.
+    # Requires a STRONG ask signal — "what is" alone is insufficient because
+    # "What is the wildfire trend?" is a data query, not a document Q&A question.
+    if wants_query and wants_ask_strong:
         return RoutingDecision(
             tools=["query", "ask"],
             reasoning="Question requests analytics results plus contextual reasoning",
