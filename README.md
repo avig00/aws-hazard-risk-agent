@@ -2,9 +2,17 @@
 
 An enterprise-grade agentic AI system that answers complex county-level disaster risk questions by combining predictive ML, governed NL→SQL analytics, and RAG-based document retrieval — with a live Streamlit dashboard.
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://xhpmugptxqqtnwxaogpghz.streamlit.app/)
+---
 
-## App Preview
+## Live Application — Streamlit Hazard Risk Agent
+
+[![Streamlit](https://img.shields.io/badge/Streamlit-Hazard_Risk_Agent-1DB594?style=for-the-badge&logo=streamlit&logoColor=white)](https://xhpmugptxqqtnwxaogpghz.streamlit.app/)
+
+🔗 [https://xhpmugptxqqtnwxaogpghz.streamlit.app/](https://xhpmugptxqqtnwxaogpghz.streamlit.app/)
+
+This production-deployed Streamlit application demonstrates the full agent stack — ML prediction, governed analytics, and RAG document retrieval — through a natural language chat interface backed by live AWS services.
+
+### App Preview
 
 ![App Demo](assets/demo.gif)
 
@@ -296,6 +304,32 @@ The agent is evaluated end-to-end using an LLM-as-Judge harness (Amazon Nova Lit
 The two WARN cases reflect data coverage gaps rather than agent logic failures. The wildfire trend query returns a single year of data — the Gold-layer hazard summary has sparse Wildfire records — so there is no multi-year trend to analyze and the LLM correctly surfaces this limitation. The NRI methodology case relies on the RAG tool; without a Pinecone API key in the eval environment, it falls back to domain knowledge, which the judge penalizes for lack of document citations. Both cases resolve in a fully configured production deployment.
 
 > **On LLM choice:** Nova Lite was selected over Claude for vendor stability and cost predictability — see Technology Stack for details. The evaluation scores above are representative of the synthesis quality achievable with this model on structured data tasks.
+
+---
+
+## Known Limitations
+
+These are understood tradeoffs made consciously for a proof-of-concept scope, not oversights.
+
+**ML Model**
+- **69.3% accuracy** on a 3-class risk classification problem. The ceiling is constrained by design: NRI composite scores and same-period damage features were deliberately excluded to prevent circular reasoning (both are derived from the same FEMA/NOAA event data as the target label). The model predicts from leading indicators — hazard frequency, demographics, geography — which are harder signals. A majority-class baseline achieves ~38%; the model is +31 percentage points above that with clean features.
+- **Static annual retraining cadence.** The Gold-layer data pipeline runs once per year, so predictions are always based on the most recent complete year of data. Real-time risk scoring would require a streaming ingestion layer (Kinesis → Delta Live Tables or equivalent).
+
+**RAG Corpus**
+- **Small document corpus** (24 indexed chunks). The `/ask` tool demonstrates the full RAG pipeline — embedding, vector retrieval, grounded synthesis — but a production deployment would index thousands of FEMA reports, NOAA event narratives, and NRI methodology documents. Corpus size is an operational constraint, not an architectural one.
+- **No conversation memory.** Each question is processed independently. Multi-turn follow-up questions (e.g., "Tell me more about the second county") are not supported; the agent has no memory of prior turns within a session.
+
+**Agent Routing**
+- **Regex-based router.** The intent classifier uses multi-signal regex rules rather than an LLM. This is intentional (deterministic, zero-latency, zero-cost, auditable) but brittle for question phrasings not covered by the rule set. An LLM-based router would generalize better at the cost of ~200ms and ~$0.001 per query.
+- **LLM synthesis reliability.** Despite extensive prompt guardrails (ranking notes, forbidden superlatives, hard counting instructions), the TAG synthesis layer can still produce incorrect comparative claims on non-ranking columns. This is an inherent limitation of LLM-backed narrative generation over tabular data.
+
+**Data Coverage**
+- **Hurricane/Tropical Storm gap.** NOAA Storm Events records local meteorological impacts rather than full storm systems. Hurricane tracks, landfalls, and intensities are authoritative only from NHC/HURDAT2, which is not in the Gold layer. Tropical Storm event counts in the database systematically undercount hurricane impact.
+- **Wildfire trend data is sparse.** The Gold-layer hazard event summary has limited multi-year Wildfire coverage, making year-over-year wildfire trend queries unreliable. Flood, tornado, and wind hazards have full 2010–2023 history.
+
+**Infrastructure**
+- **SageMaker Serverless cold starts.** The prediction endpoint uses a serverless configuration, which introduces ~5–10 second cold-start latency on the first request after idle periods. A provisioned endpoint would eliminate this at higher cost.
+- **No authentication layer.** The Streamlit app is publicly accessible. A production deployment would add Cognito or an equivalent auth layer in front of the application.
 
 ---
 
