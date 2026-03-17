@@ -239,8 +239,11 @@ def run_query(
     # For templates with a hardcoded ORDER BY (not a {order_col} parameter), inject
     # the sort column name so the TAG prompt can tell the LLM what the ranking criterion is.
     _FIXED_ORDER_COLS = {
-        "hazard_event_increase": "absolute_increase",
-        "largest_increase":      "absolute_increase",
+        "hazard_event_increase":  "absolute_increase",
+        "largest_increase":       "absolute_increase",
+        "top_counties_by_risk":   "avg_eal_score",
+        "top_counties_in_state":  "avg_eal_score",
+        "fema_declarations_by_state": "total_declarations",
     }
     order_col = clean_params.get("order_col", "") or _FIXED_ORDER_COLS.get(intent.template, "")
 
@@ -336,7 +339,27 @@ def _data_quality_note(question: str, results: list, intent_template: str) -> st
             f"Gold-layer hazard types: {_DB_HAZARD_TYPES}."
         )
 
-    # Pattern 3: Wildfire queries against hazard_event_summary — NOAA Storm Events
+    # Pattern 3a: Tropical Storm (hurricane) queries — NOAA Storm Events records local
+    # impacts (wind, rain, flooding) but the National Hurricane Center (NHC) and HURDAT2
+    # are the authoritative sources for storm tracks and landfalls.  Major hurricane
+    # impacts may be logged under separate event types (Flood, High Wind, etc.) rather
+    # than "Tropical Storm", so counts here are a lower bound.
+    if db_hazard == "Tropical Storm" and intent_template in (
+        "top_counties_by_hazard", "hazard_event_increase", "hazard_trend_specific",
+        "hazard_trend_by_feature",
+    ):
+        return (
+            "DATA LIMITATION — must tell the user: "
+            "The user asked about 'hurricane' (Gold-layer canonical term: 'Tropical Storm'). "
+            "NOAA Storm Events records local meteorological impacts rather than the full storm "
+            "system — the National Hurricane Center (NHC) and HURDAT2 are the authoritative "
+            "sources for hurricane tracks, landfalls, and intensities. Many hurricane impacts "
+            "are filed under separate NOAA event types (Flood, High Wind, Heavy Rain) rather "
+            "than 'Tropical Storm', so event counts here are a lower-bound indicator. "
+            "For comprehensive hurricane data, consult the NHC Best Track or HURDAT2 datasets."
+        )
+
+    # Pattern 3b: Wildfire queries against hazard_event_summary — NOAA Storm Events
     # systematically underreports wildfires because fire data is primarily tracked by
     # USFS, CAL FIRE, and NIFC, not NOAA. Warn the user so they don't treat these
     # event counts as a complete picture of wildfire risk.

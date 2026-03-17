@@ -35,6 +35,8 @@ _QUERY_SIGNALS = [
     r"\bmost\b", r"\bworst\b", r"\bgreatest\b",
     # FEMA declarations are always answerable from Gold-layer data
     r"\bfema\s+declaration",
+    # "show me risk data" / "show risk" — imperative display request implies structured data
+    r"\bshow\b",
 ]
 _ASK_SIGNALS = [
     r"\bwhy\b", r"\bwhat\s+is\b", r"\bexplain\b", r"\bdescribe\b",

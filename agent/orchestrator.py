@@ -410,6 +410,14 @@ def run_agent(
                 # FIPS path — unambiguous, no state hint needed
                 features, county_name, county_fips = _fetch_county_features(county_id)
 
+            # County lookup returned no rows — it doesn't exist in the Gold-layer DB
+            if county_id and not features:
+                tool_outputs["predict"] = {
+                    "_not_found": True,
+                    "_county_name": county_id,
+                }
+                raise ValueError(f"County '{county_id}' not found in database")
+
             pred = predict_risk(features=features, endpoint_name=sagemaker_endpoint)
             pred["county_name"] = county_name
             pred["county_fips"] = county_fips
@@ -419,6 +427,12 @@ def run_agent(
             tool_outputs["predict"] = pred
         except _AmbiguousCountyError:
             pass  # tool_outputs["predict"] already set with _ambiguous flag above
+        except ValueError as exc:
+            if tool_outputs.get("predict", {}).get("_not_found"):
+                pass  # tool_outputs["predict"] already set with _not_found flag above
+            else:
+                logger.warning("Predict tool failed: %s", exc)
+                tool_outputs["predict"] = {"error": str(exc)}
         except Exception as exc:
             logger.warning("Predict tool failed: %s", exc)
             tool_outputs["predict"] = {"error": str(exc)}
@@ -550,7 +564,14 @@ def run_agent(
     elif "predict" in decision.tools and "query" not in decision.tools and "ask" not in decision.tools:
         # Pure predict route
         pred_out = tool_outputs.get("predict", {})
-        if pred_out.get("_ambiguous"):
+        if pred_out.get("_not_found"):
+            county = pred_out.get("_county_name", "that county")
+            result["answer"] = (
+                f"**{county} County** was not found in the hazard risk database. "
+                f"The Gold-layer dataset covers all U.S. counties with FEMA and NRI records — "
+                f"please check the county name spelling or try using a 5-digit FIPS code."
+            )
+        elif pred_out.get("_ambiguous"):
             county = pred_out.get("_county_name", "that county")
             states = pred_out.get("_possible_states", [])
             states_list = ", ".join(states)
