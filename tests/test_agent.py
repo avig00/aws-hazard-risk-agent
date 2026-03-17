@@ -15,10 +15,10 @@ from agent.router import RoutingDecision, route
 # ── router ────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("question,expected_tools", [
-    ("Show top 10 counties by predicted risk score", ["predict"]),
+    ("Show top 10 counties by predicted risk score", ["query"]),   # no county → query-only
     ("Which counties have the highest flood event count since 2015?", ["query"]),
     ("Why are coastal counties more vulnerable to hurricanes?", ["ask"]),
-    ("Show top 10 counties by predicted risk and property damage", ["predict", "query"]),
+    ("What is the predicted risk and property damage for Harris County TX?", ["predict", "query"]),
     ("What are the trend results and why do they show increasing floods?", ["query", "ask"]),
 ])
 def test_router_tools(question, expected_tools):
@@ -37,7 +37,8 @@ def test_router_returns_routing_decision():
 
 
 def test_router_hybrid_flag():
-    decision = route("Show top counties by predicted risk and property damage")
+    # Hybrid predict+query requires a named county — without one the ML endpoint can't run
+    decision = route("What is the predicted risk and property damage for Harris County TX?")
     assert decision.is_hybrid is True
 
 

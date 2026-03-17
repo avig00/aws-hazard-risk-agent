@@ -238,7 +238,7 @@ if not st.session_state.get("messages"):
     c1, c2, c3 = st.columns(3)
     _QUICKSTART = [
         ("🔎", "Analytics", "Which counties saw the largest increase in flood events 2015–2023?"),
-        ("🤖", "ML Prediction", "Show top 10 counties by predicted risk and property damage"),
+        ("🤖", "ML Prediction", "What is the predicted risk tier for Harris County, TX?"),
         ("📚", "Document Q&A", "Why are coastal counties more vulnerable to hurricanes?"),
     ]
     for col, (icon, label, question) in zip([c1, c2, c3], _QUICKSTART):
