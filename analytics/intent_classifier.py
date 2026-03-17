@@ -90,11 +90,12 @@ def _extract_limit(question: str, default: int = 10) -> int:
         n = match.group(1) or match.group(2)
         return int(n)
 
-    # Singular county + superlative → user wants exactly one result
-    # Matches: "which county has the highest", "what county is the most",
-    #          "the least risky county", "the safest county", "the worst county"
+    # Singular county + superlative → user wants exactly one result.
+    # Check for "county" anywhere in the question (not just adjacent to which/what/the)
+    # to handle patterns like "What is the worst county for floods" where "worst" sits
+    # between "what" and "county".
     is_singular_county = bool(
-        re.search(r"\b(which|what|the)\s+(single\s+)?county\b", question, re.IGNORECASE)
+        re.search(r"\bcounty\b", question, re.IGNORECASE)
         and not re.search(r"\bcounties\b", question, re.IGNORECASE)
     )
     has_superlative = bool(
