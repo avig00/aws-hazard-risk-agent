@@ -316,7 +316,7 @@ These are understood tradeoffs made consciously for a proof-of-concept scope, no
 - **Static annual retraining cadence.** The Gold-layer data pipeline runs once per year, so predictions are always based on the most recent complete year of data. Real-time risk scoring would require a streaming ingestion layer (Kinesis → Delta Live Tables or equivalent).
 
 **RAG Corpus**
-- **Small document corpus** (24 indexed chunks). The `/ask` tool demonstrates the full RAG pipeline — embedding, vector retrieval, grounded synthesis — but a production deployment would index thousands of FEMA reports, NOAA event narratives, and NRI methodology documents. Corpus size is an operational constraint, not an architectural one.
+- **Small document corpus** — 6 source documents chunked into 24 indexed vectors (`flood_risk_coastal_counties`, `hurricane_risk_gulf_atlantic`, `nri_methodology`, `social_vulnerability_disaster_risk`, `tornado_risk_central_us`, `wildfire_risk_western_us`). The `/ask` tool demonstrates the full RAG pipeline — embedding, vector retrieval, grounded synthesis — but a production deployment would index thousands of FEMA reports, NOAA event narratives, and NRI methodology documents. Corpus size is an operational constraint, not an architectural one.
 - **No conversation memory.** Each question is processed independently. Multi-turn follow-up questions (e.g., "Tell me more about the second county") are not supported; the agent has no memory of prior turns within a session.
 
 **Agent Routing**
@@ -431,9 +431,13 @@ pip install -r requirements.txt
 
 ### Configure secrets
 
-```bash
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-# Edit secrets.toml with your AWS credentials and Pinecone API key
+Create `.streamlit/secrets.toml` with the following keys:
+
+```toml
+AWS_ACCESS_KEY_ID = "..."
+AWS_SECRET_ACCESS_KEY = "..."
+AWS_DEFAULT_REGION = "us-east-1"
+PINECONE_API_KEY = "..."
 ```
 
 ### Run the Streamlit app
