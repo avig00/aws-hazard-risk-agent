@@ -16,12 +16,9 @@ This production-deployed Streamlit application demonstrates the full agent stack
 
 ![App Demo](assets/demo.gif)
 
-<table>
-  <tr>
-    <td><img src="assets/Hazard-Risk-Intelligence-Agent-screenshot1.png" alt="Analytics view" width="100%"/></td>
-    <td><img src="assets/Hazard-Risk-Intelligence-Agent-screenshot2.png" alt="ML prediction view" width="100%"/></td>
-  </tr>
-</table>
+![County and Year view](assets/Hazard-Risk-Intelligence-Agent-screenshot1.png)
+
+![ML prediction view](assets/Hazard-Risk-Intelligence-Agent-screenshot2.png)
 
 ---
 
